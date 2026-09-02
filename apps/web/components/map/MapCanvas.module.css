@@ -1,0 +1,10 @@
+.root {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  background: var(--c-bg-map);
+}
+.map {
+  position: absolute;
+  inset: 0;
+}

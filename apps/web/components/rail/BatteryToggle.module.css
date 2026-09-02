@@ -1,0 +1,51 @@
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  height: 30px;
+  padding: 0 2px;
+  cursor: pointer;
+}
+.label,
+.labelOn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-dim-2);
+  transition: color 0.25s;
+}
+.labelOn {
+  color: var(--c-lime);
+}
+.track,
+.trackOn {
+  position: relative;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 17px;
+  padding: 0;
+  border: none;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: background 0.25s;
+  background: rgba(255, 255, 255, 0.14);
+}
+.trackOn {
+  background: rgba(203, 242, 77, 0.55);
+}
+.knob,
+.knobOn {
+  position: absolute;
+  top: 2.5px;
+  left: 2.5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--c-text);
+  transition: left 0.25s var(--ease-ui);
+}
+.knobOn {
+  left: 15.5px;
+}

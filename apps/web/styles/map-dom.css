@@ -1,0 +1,211 @@
+/* Imperative map DOM: unit markers, cluster discs and the cluster hover list rows. */
+.mk-host {
+  width: 11px;
+  height: 11px;
+}
+.mk-inner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  cursor: none;
+  will-change: transform, opacity;
+  transform-origin: 5.5px 5.5px;
+  transition:
+    opacity 0.45s var(--ease-ui),
+    transform 0.45s var(--ease-ui);
+  opacity: 1;
+  transform: scale(1);
+}
+.mk-inner[data-hot="1"] {
+  transform: scale(1.5);
+}
+.mk-inner[data-hidden="1"] {
+  opacity: 0;
+  transform: scale(0.4);
+}
+.mk-inner[data-dim="1"] {
+  opacity: 0.06;
+  transform: scale(0.4);
+}
+.mk-ring {
+  position: absolute;
+  left: 1px;
+  top: 1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: transparent;
+}
+.mk-ring[data-pulse="1"] {
+  background: var(--c-alert);
+  animation: ping 1.9s var(--ease-pulse) infinite;
+}
+.mk-dot {
+  border: 2px solid var(--c-bg-map);
+  transition:
+    background 0.3s,
+    box-shadow 0.3s;
+  background: var(--c-idle);
+}
+.mk-dot[data-mode="sjø"] {
+  width: 11px;
+  height: 11px;
+  margin: 0;
+  border-radius: 50%;
+}
+.mk-dot[data-mode="bane"] {
+  width: 10px;
+  height: 10px;
+  margin: 0.5px;
+  border-radius: 2px;
+}
+.mk-dot[data-mode="vei"] {
+  width: 9px;
+  height: 9px;
+  margin: 1px;
+  border-radius: 1px;
+  transform: rotate(45deg);
+}
+.mk-dot[data-status="moving"] {
+  background: var(--c-lime);
+}
+.mk-dot[data-status="alert"] {
+  background: var(--c-alert);
+}
+.mk-inner[data-hot="1"] .mk-dot {
+  box-shadow: 0 0 0 5px rgba(203, 242, 77, 0.2);
+}
+.mk-inner[data-hot="1"] .mk-dot[data-status="alert"] {
+  box-shadow: 0 0 0 5px rgba(255, 122, 82, 0.22);
+}
+.mk-label {
+  position: absolute;
+  left: 16px;
+  top: -8px;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  padding: 3px 7px;
+  border-radius: 2px;
+  background: rgba(10, 12, 11, 0.94);
+  border: 1px solid var(--c-line-3);
+  color: var(--c-text);
+  opacity: 0;
+  transform-origin: left center;
+  transform: translateX(-4px) scale(0.7);
+  transition:
+    opacity 0.22s,
+    transform 0.22s;
+  pointer-events: none;
+}
+.mk-inner[data-hot="1"]:not([data-hidden="1"]) .mk-label {
+  opacity: 1;
+  transform: translateX(0) scale(0.7);
+}
+
+.cl-host {
+  width: 34px;
+  height: 34px;
+}
+.cl-inner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  cursor: none;
+  will-change: transform, opacity;
+  transform-origin: 17px 17px;
+  transition:
+    opacity 0.45s var(--ease-ui),
+    transform 0.45s var(--ease-ui);
+}
+.cl-inner[data-hot="1"] {
+  transform: scale(1.16);
+}
+.cl-disc {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--c-text-2);
+  background: rgba(10, 12, 11, 0.86);
+  border: 1px solid #2e352f;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  transition:
+    border-color 0.25s,
+    background 0.25s,
+    color 0.25s,
+    box-shadow 0.25s,
+    letter-spacing 0.25s;
+}
+.cl-disc[data-moving="1"] {
+  border-color: #3f4a3a;
+}
+.cl-disc[data-alert="1"] {
+  border-color: var(--c-alert);
+  color: var(--c-alert-light);
+  background: rgba(38, 17, 12, 0.86);
+}
+.cl-inner[data-hot="1"] .cl-disc {
+  border-color: var(--c-lime);
+  color: var(--c-text);
+  background: rgba(18, 22, 17, 0.92);
+  box-shadow: 0 0 0 4px rgba(203, 242, 77, 0.13);
+  letter-spacing: 0.08em;
+}
+.cl-inner[data-hot="1"] .cl-disc[data-alert="1"] {
+  border-color: var(--c-alert);
+  color: var(--c-alert-lighter);
+  background: rgba(38, 17, 12, 0.86);
+  box-shadow: 0 0 0 4px rgba(255, 122, 82, 0.14);
+}
+
+.clu-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  color: var(--c-text-3);
+}
+.clu-dot {
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+}
+.clu-id {
+  flex: 1;
+}
+.clu-mode {
+  color: var(--c-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 8.5px;
+}
+.clu-more {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-text-faint-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-ring[data-pulse="1"] {
+    animation: none;
+    background: transparent;
+  }
+}

@@ -1,0 +1,58 @@
+.tray {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 3px;
+  background: var(--c-glass);
+  border: 1px solid var(--c-panel-border);
+  border-radius: var(--r-ctrl);
+  -webkit-backdrop-filter: var(--glass-blur-ctrl);
+  backdrop-filter: var(--glass-blur-ctrl);
+  box-shadow: var(--sh-ctrl);
+  z-index: 3;
+  transition:
+    left 0.42s var(--ease-ui),
+    top 0.42s var(--ease-ui);
+}
+.btn,
+.btnMono,
+.btnOn,
+.btnZoom {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--r-row);
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    color 0.2s;
+  color: var(--c-icon);
+  font-family: var(--font-mono);
+}
+.btn:hover,
+.btnMono:hover,
+.btnOn:hover,
+.btnZoom:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+.btnMono,
+.btnOn {
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+}
+.btnOn {
+  color: var(--c-lime);
+}
+.btnZoom {
+  font-size: 12px;
+}
+.fitIcon {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--c-icon);
+}

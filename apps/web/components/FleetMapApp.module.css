@@ -1,0 +1,19 @@
+.root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-ui);
+  background: var(--c-bg-app);
+  overflow: hidden;
+}
+.main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  position: relative;
+}
+.mapSkeleton {
+  flex: 1;
+  background: var(--c-bg-map);
+}

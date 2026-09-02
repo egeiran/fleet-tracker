@@ -1,0 +1,138 @@
+.root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  color: var(--c-lime);
+  transition: opacity 0.2s ease;
+  z-index: 2;
+  overflow: hidden;
+}
+.hair,
+.hairV {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.hair {
+  width: 190px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(203, 242, 77, 0) 0%,
+    rgba(203, 242, 77, 0.14) 34%,
+    rgba(203, 242, 77, 0.14) 66%,
+    rgba(203, 242, 77, 0) 100%
+  );
+}
+.hairV {
+  width: 1px;
+  height: 190px;
+  background: linear-gradient(
+    180deg,
+    rgba(203, 242, 77, 0) 0%,
+    rgba(203, 242, 77, 0.14) 34%,
+    rgba(203, 242, 77, 0.14) 66%,
+    rgba(203, 242, 77, 0) 100%
+  );
+}
+.ret {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 46px;
+  height: 46px;
+  will-change: transform;
+}
+.cornerTL,
+.cornerTR,
+.cornerBL,
+.cornerBR {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+}
+.cornerTL {
+  left: 0;
+  top: 0;
+  border-left: 1px solid currentColor;
+  border-top: 1px solid currentColor;
+}
+.cornerTR {
+  right: 0;
+  top: 0;
+  border-right: 1px solid currentColor;
+  border-top: 1px solid currentColor;
+}
+.cornerBL {
+  left: 0;
+  bottom: 0;
+  border-left: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+}
+.cornerBR {
+  right: 0;
+  bottom: 0;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+}
+.dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  margin: -1.5px 0 0 -1.5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.tickN,
+.tickS {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1px;
+  height: 7px;
+  background: currentColor;
+  opacity: 0.6;
+}
+.tickN {
+  margin: -18px 0 0 -0.5px;
+}
+.tickS {
+  margin: 11px 0 0 -0.5px;
+}
+.lock {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  opacity: 0;
+}
+.read {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+  white-space: nowrap;
+}
+.read1 {
+  color: var(--c-text-3);
+}
+.read2 {
+  color: currentColor;
+  opacity: 0.82;
+}

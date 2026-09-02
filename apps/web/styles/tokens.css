@@ -1,0 +1,89 @@
+/* Design tokens from the Vakt handoff. Values are final — do not tune here without the design. */
+:root {
+  /* surfaces */
+  --c-bg-app: #08090a;
+  --c-bg-map: #0a0c0b;
+  --c-glass: rgba(14, 17, 15, 0.5);
+  --c-glass-strong: rgba(14, 17, 15, 0.56);
+  --c-glass-header: rgba(14, 17, 15, 0.52);
+  --c-glass-pill: rgba(14, 17, 15, 0.55);
+  --c-glass-solid: rgba(14, 17, 15, 0.9);
+  --c-panel-border: rgba(232, 235, 231, 0.09);
+  --c-divider: rgba(232, 235, 231, 0.07);
+  --c-line-1: #151816;
+  --c-line-2: #1b201c;
+  --c-line-3: #22271f;
+  --c-row-selected: #141815;
+  --c-tag-bg: #101413;
+
+  /* text */
+  --c-text: #e8ebe7;
+  --c-text-2: #d6dbd6;
+  --c-text-3: #c9cfc9;
+  --c-text-dim: #8a928c;
+  --c-text-dim-2: #7c847d;
+  --c-text-dim-3: #6b736c;
+  --c-text-faint: #5c645d;
+  /* #4E554F in the design sits below AA for small text; lifted one step per handoff note. */
+  --c-text-faint-2: #5c645d;
+  --c-text-faint-design: #4e554f;
+  --c-text-disabled: #3e453f;
+  --c-icon: #a6aea7;
+  --c-legend: #98a099;
+
+  /* accent */
+  --c-lime: #cbf24d;
+  --c-lime-hover: #e2ff8c;
+  --c-lime-rgb: 203, 242, 77;
+  --c-on-lime: #0c0e0d;
+  --c-alert: #ff7a52;
+  --c-alert-light: #ff9e80;
+  --c-alert-lighter: #ffb49b;
+  --c-alert-rgb: 255, 122, 82;
+  --c-warn: #f2c14e;
+  --c-idle: #8a928c;
+  --c-idle-reticle: #b9c1ba;
+  --c-muted-dot: #7c847d;
+
+  /* typography */
+  --font-ui: var(--font-archivo), Archivo, Helvetica, sans-serif;
+  --font-mono: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
+
+  /* radii */
+  --r-tag: 2px;
+  --r-btn: 3px;
+  --r-chip: 6px;
+  --r-row: 7px;
+  --r-field: 8px;
+  --r-tray: 9px;
+  --r-ctrl: 10px;
+  --r-panel: 12px;
+
+  /* shadows */
+  --sh-header: 0 12px 34px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --sh-panel: 0 26px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --sh-tray: 0 14px 38px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --sh-ctrl: 0 16px 38px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --sh-timeline: 0 22px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --sh-cluster-list: 0 16px 34px rgba(0, 0, 0, 0.5);
+  --sh-focus: 0 0 0 3px rgba(203, 242, 77, 0.12);
+
+  /* motion */
+  --ease-ui: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-pulse: cubic-bezier(0, 0.2, 0.6, 1);
+
+  /* glass */
+  --glass-blur: blur(30px) saturate(180%);
+  --glass-blur-header: blur(28px) saturate(180%);
+  --glass-blur-ctrl: blur(24px) saturate(180%);
+  --glass-blur-small: blur(18px) saturate(160%);
+
+  /* layout */
+  --header-h: 54px;
+  --edge: 14px;
+  --rail-w: 280px;
+  --content-left: 308px;
+  --detail-w: 340px;
+  --timeline-w: 468px;
+  --timeline-zone: 122px;
+}

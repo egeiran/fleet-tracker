@@ -1,0 +1,23 @@
+.toast {
+  position: absolute;
+  left: 50%;
+  top: 68px;
+  transform: translateX(-50%);
+  height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 13px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c-text-3);
+  background: var(--c-glass-pill);
+  border: 1px solid rgba(232, 235, 231, 0.1);
+  border-radius: var(--r-tray);
+  -webkit-backdrop-filter: var(--glass-blur-ctrl);
+  backdrop-filter: var(--glass-blur-ctrl);
+  box-shadow: var(--sh-tray);
+  z-index: 7;
+  animation: toastIn 0.3s var(--ease-ui) both;
+}

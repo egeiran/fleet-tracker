@@ -1,0 +1,18 @@
+.badge,
+.badgeLive,
+.badgeWarn {
+  padding: 3px 7px;
+  border: 1px solid var(--c-line-3);
+  border-radius: var(--r-tag);
+  color: var(--c-text-dim-3);
+  white-space: nowrap;
+  transition: color 0.3s, border-color 0.3s;
+}
+.badgeLive {
+  color: var(--c-lime);
+  border-color: rgba(203, 242, 77, 0.35);
+}
+.badgeWarn {
+  color: var(--c-warn);
+  border-color: rgba(242, 193, 78, 0.35);
+}

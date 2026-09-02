@@ -18,3 +18,4 @@ export * from "./normalize";
 export * from "./place";
 export * from "./format";
 export * from "./sim";
+export * from "./settings";

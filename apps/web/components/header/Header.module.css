@@ -1,0 +1,106 @@
+.header {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 18px;
+  height: var(--header-h);
+  background: var(--c-glass-header);
+  -webkit-backdrop-filter: var(--glass-blur-header);
+  backdrop-filter: var(--glass-blur-header);
+  border-bottom: 1px solid var(--c-divider);
+  box-shadow: var(--sh-header);
+  z-index: 6;
+}
+.lockup {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+.mark {
+  width: 8px;
+  height: 8px;
+  background: var(--c-lime);
+  transform: rotate(45deg);
+}
+.wordmark {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.sub {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--c-text-faint);
+  text-transform: uppercase;
+}
+.nav {
+  display: flex;
+  gap: 2px;
+  margin-left: 4px;
+}
+.navActive,
+.navDisabled {
+  padding: 5px 11px;
+  font-size: 12px;
+  border-radius: var(--r-btn);
+}
+.navActive {
+  font-weight: 500;
+  color: var(--c-on-lime);
+  background: var(--c-lime);
+}
+.navActive:hover {
+  color: var(--c-on-lime);
+}
+.navDisabled {
+  color: var(--c-text-disabled);
+  cursor: not-allowed;
+}
+.spacer {
+  flex: 1;
+}
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c-text-faint);
+}
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.dot,
+.dotWarn,
+.dotAlert {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-lime);
+  box-shadow: 0 0 0 3px rgba(203, 242, 77, 0.16);
+  transition: background 0.3s, box-shadow 0.3s;
+}
+.dotWarn {
+  background: var(--c-warn);
+  box-shadow: 0 0 0 3px rgba(242, 193, 78, 0.16);
+}
+.dotAlert {
+  background: var(--c-alert);
+  box-shadow: 0 0 0 3px rgba(255, 122, 82, 0.16);
+}
+.statValue {
+  color: var(--c-text-3);
+}
+.alertValue {
+  color: var(--c-alert);
+}

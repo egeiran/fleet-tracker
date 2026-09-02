@@ -1,0 +1,34 @@
+.legend {
+  position: absolute;
+  bottom: var(--timeline-zone);
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c-legend);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  z-index: 2;
+  transition: left 0.42s var(--ease-ui);
+}
+.key {
+  color: var(--c-text-faint);
+}
+.item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.sep {
+  width: 1px;
+  height: 11px;
+  background: rgba(232, 235, 231, 0.14);
+}
