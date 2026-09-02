@@ -1,0 +1,19 @@
+# Local production-style run of the ingest worker (the web app runs with `pnpm --filter @vakt/web dev`).
+services:
+  ingest:
+    build:
+      context: .
+      dockerfile: apps/ingest/Dockerfile
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      DB_PATH: /data/ingest.sqlite
+      CORS_ORIGINS: http://localhost:3000
+    volumes:
+      - ingest_data:/data
+    restart: unless-stopped
+
+volumes:
+  ingest_data:

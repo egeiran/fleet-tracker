@@ -3,7 +3,7 @@ import { unitIdsForSlots } from "../src/ids";
 import { navStatusLabel } from "../src/navStatus";
 import { shipTypeInfo } from "../src/shipTypes";
 import { deriveTrainStatus, deriveVesselStatus, isStale } from "../src/status";
-import { formatClock, hoursBack, tLabel, timeAt } from "../src/time";
+import { formatClock, formatEventTime, hoursBack, tLabel, timeAt } from "../src/time";
 
 describe("shipTypeInfo", () => {
   it("maps ITU decades to classes", () => {
@@ -66,6 +66,12 @@ describe("time", () => {
   });
   it("timeAt maps 0–100 onto the window", () => {
     expect(timeAt({ from: 0, to: 1000 }, 25)).toBe(250);
+  });
+  it("formatEventTime adds a day hint for older events", () => {
+    const now = Date.UTC(2026, 8, 2, 19, 0);
+    expect(formatEventTime(now - 3_600_000, now)).toBe("20:00");
+    expect(formatEventTime(now - 23 * 3_600_000, now)).toBe("i går 22:00");
+    expect(formatEventTime(now - 3 * 86_400_000, now)).toBe("30.08 21:00");
   });
   it("formatClock renders HH:MM in Oslo time", () => {
     expect(formatClock(Date.UTC(2026, 8, 2, 9, 20))).toBe("11:20");

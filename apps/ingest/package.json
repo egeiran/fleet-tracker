@@ -1,0 +1,29 @@
+{
+  "name": "@vakt/ingest",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=../../.env --no-warnings=ExperimentalWarning --watch --import tsx src/index.ts",
+    "start": "node --no-warnings=ExperimentalWarning dist/index.js",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/index.js --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --log-level=warning",
+    "probe": "node --env-file-if-exists=../../.env --no-warnings=ExperimentalWarning --import tsx scripts/probe.ts",
+    "test": "vitest run",
+    "lint": "eslint src scripts test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@vakt/domain": "workspace:*",
+    "@vakt/mock": "workspace:*",
+    "hono": "^4.13.5",
+    "undici": "^7.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "esbuild": "^0.25.10",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

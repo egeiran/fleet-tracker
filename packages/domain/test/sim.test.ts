@@ -47,7 +47,7 @@ describe("simulate", () => {
     for (let i = 1; i < res.events.length; i++) expect(res.events[i]!.ts).toBeLessThanOrEqual(res.events[i - 1]!.ts);
     const boarding = res.events.find((e) => e.label.startsWith("Om bord"))!;
     expect(boarding.simulated).toBe(false);
-    expect(boarding.time).toMatch(/^\d{2}:\d{2}$/);
+    expect(boarding.time).toMatch(/(^|i går )\d{2}:\d{2}$/);
   });
   it("battery drains with assignment age and idle units can be unbooked", () => {
     const fresh = simulate("VKT-42", ctx());

@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
@@ -10,12 +11,16 @@ export default tseslint.config(
       "**/.next/**",
       "**/.turbo/**",
       "design_handoff_fleet_map/**",
+      "**/public/**",
       "**/playwright-report/**",
       "**/test-results/**",
     ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
   {
     files: ["apps/web/**/*.{ts,tsx}"],
     plugins: { "react-hooks": reactHooks },

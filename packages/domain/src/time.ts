@@ -50,3 +50,25 @@ export function formatClockSeconds(ms: number, timeZone = "Europe/Oslo"): string
     .format(new Date(ms))
     .replace(/\./g, ":");
 }
+
+const dayCache = new Map<string, Intl.DateTimeFormat>();
+function dayFormatter(timeZone: string): Intl.DateTimeFormat {
+  let f = dayCache.get(timeZone);
+  if (!f) {
+    f = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
+    dayCache.set(timeZone, f);
+  }
+  return f;
+}
+
+/** "HH:MM" today, "i går HH:MM" yesterday, otherwise "DD.MM HH:MM" — all in the given zone. */
+export function formatEventTime(ms: number, now: number, timeZone = "Europe/Oslo"): string {
+  const clock = formatClock(ms, timeZone);
+  const day = dayFormatter(timeZone).format(new Date(ms));
+  const today = dayFormatter(timeZone).format(new Date(now));
+  if (day === today) return clock;
+  const yesterday = dayFormatter(timeZone).format(new Date(now - DAY_MS));
+  if (day === yesterday) return `i går ${clock}`;
+  const [, m, d] = day.split("-");
+  return `${d}.${m} ${clock}`;
+}

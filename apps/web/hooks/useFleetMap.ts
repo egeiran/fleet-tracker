@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useRef, type RefObject } from "react";
 import { bboxOf, CLUSTER_MAX_ZOOM, HOME_BOUNDS, padBbox, SELECT_ZOOM, type LngLat } from "@vakt/domain";
-import * as maplibre from "maplibre-gl";
 import { getWorkerUrl, Map as MlMap, setWorkerUrl, type ErrorEvent as MlErrorEvent } from "maplibre-gl";
 import { actions, type FleetStore } from "@/lib/fleetStore";
 import { cubicOut } from "@/lib/map/easing";
@@ -91,7 +90,10 @@ export function useFleetMap(containerRef: RefObject<HTMLDivElement | null>, stor
     });
     map.keyboard.disable();
     ctrl.map = map;
-    if (process.env.NODE_ENV !== "production") (window as unknown as { __vaktMap?: MlMap; __vaktMl?: unknown }).__vaktMap = map, (window as unknown as { __vaktMl?: unknown }).__vaktMl = maplibre;
+    if (process.env.NODE_ENV !== "production") {
+      // Handy for poking at the map from the console during development.
+      (window as unknown as { __vaktMap?: MlMap }).__vaktMap = map;
+    }
 
     let queued = false;
     const sync = () => {
