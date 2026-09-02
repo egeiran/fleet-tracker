@@ -1,0 +1,30 @@
+{
+  "name": "vakt",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Vakt · flåteintelligens — fleet map with live AIS/rail data",
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "e2e": "pnpm --filter @vakt/web e2e",
+    "ingest:probe": "pnpm --filter @vakt/ingest probe",
+    "format": "prettier --write \"**/*.{ts,tsx,css,md,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,css,md,json}\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@types/node": "^22.20.1",
+    "eslint": "^9.39.0",
+    "prettier": "^3.6.2",
+    "turbo": "^2.10.12",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.0"
+  }
+}

@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<script>
+  /* Skjulte forhåndsvisninger stopper requestAnimationFrame; MapLibre laster stil og fliser via rAF. */
+  (function () {
+    var raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = function (cb) {
+      if (document.hidden) return setTimeout(function () { cb(performance.now()); }, 16);
+      return raf(cb);
+    };
+  })();
+</script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+  html, body { margin: 0; padding: 0; background: #08090A; color: #E8EBE7; }
+  * { box-sizing: border-box; }
+  a { color: #CBF24D; text-decoration: none; }
+  a:hover { color: #E2FF8C; }
+  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  ::-webkit-scrollbar-thumb { background: #1E231F; border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; }
+  input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: #2A2F2B; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -5px; border-radius: 50%; background: #CBF24D; box-shadow: 0 0 0 4px rgba(203,242,77,0.16); cursor: grab; }
+  .maplibregl-ctrl-attrib { font-family: "JetBrains Mono", monospace; font-size: 9px; background: rgba(8,9,10,0.7) !important; }
+  .maplibregl-ctrl-attrib a { color: #6B736C !important; }
+  @keyframes panelIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+  @keyframes rowIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @keyframes ping { 0% { transform: scale(1); opacity: .5; } 70%, 100% { transform: scale(3.4); opacity: 0; } }
+  @keyframes lockSweep { 0% { transform: scale(.55); opacity: .85; } 100% { transform: scale(1.9); opacity: 0; } }
+  [data-reticle="on"] .maplibregl-canvas-container,
+  [data-reticle="on"] .maplibregl-canvas,
+  [data-reticle="on"] .maplibregl-canvas-container.maplibregl-interactive,
+  [data-reticle="on"] .maplibregl-marker,
+  [data-reticle="on"] .maplibregl-marker * { cursor: none !important; }
+</style>
+</helmet>
+<div style="position: fixed; inset: 0; display: flex; flex-direction: column; font-family: Archivo, Helvetica, sans-serif; background: #08090A; overflow: hidden;">
+
+  <header style="position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 24px; padding: 0 18px; height: 54px; background: rgba(14,17,15,0.52); backdrop-filter: blur(28px) saturate(180%); -webkit-backdrop-filter: blur(28px) saturate(180%); border-bottom: 1px solid rgba(232,235,231,0.07); box-shadow: 0 12px 34px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.07); z-index: 6;">
+    <div style="display: flex; align-items: baseline; gap: 9px;">
+      <div style="width: 8px; height: 8px; background: #CBF24D; transform: rotate(45deg);"></div>
+      <span style="font-size: 14px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase;">Vakt</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.14em; color: #5C645D; text-transform: uppercase;">flåteintelligens</span>
+    </div>
+    <nav style="display: flex; gap: 2px; margin-left: 4px;">
+      <span style="padding: 5px 11px; font-size: 12px; font-weight: 500; color: #0C0E0D; background: #CBF24D; border-radius: 3px;">Kart</span>
+      <span title="Ikke i denne prototypen" style="padding: 5px 11px; font-size: 12px; color: #3E453F; border-radius: 3px; cursor: not-allowed;">Bookinger</span>
+      <span title="Ikke i denne prototypen" style="padding: 5px 11px; font-size: 12px; color: #3E453F; border-radius: 3px; cursor: not-allowed;">Varsler</span>
+      <span title="Ikke i denne prototypen" style="padding: 5px 11px; font-size: 12px; color: #3E453F; border-radius: 3px; cursor: not-allowed;">Analyse</span>
+    </nav>
+    <div style="flex: 1;"></div>
+    <div style="display: flex; align-items: center; gap: 18px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #5C645D;">
+      <div style="display: flex; align-items: center; gap: 7px;">
+        <span style="width: 6px; height: 6px; border-radius: 50%; background: #CBF24D; box-shadow: 0 0 0 3px rgba(203,242,77,0.16);"></span>
+        <span style="color: #C9CFC9;">{{ counts.all }}</span> enheter
+      </div>
+      <div style="display: flex; align-items: center; gap: 7px;">
+        <span style="color: #FF7A52;">{{ counts.alert }}</span> varsler
+      </div>
+      <span style="padding: 3px 7px; border: 1px solid #22271F; border-radius: 2px; color: #6B736C;">mockdata</span>
+    </div>
+  </header>
+
+  <div style="flex: 1; display: flex; min-height: 0; position: relative;">
+
+    <aside style="position: absolute; left: 14px; top: 68px; bottom: 14px; width: 280px; display: flex; flex-direction: column; overflow: hidden; border-radius: 12px; border: 1px solid rgba(232,235,231,0.09); background: rgba(14,17,15,0.5); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); box-shadow: 0 26px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07); z-index: 5; transition: transform .42s cubic-bezier(.2,.8,.2,1), opacity .3s ease; transform: {{ railT }}; opacity: {{ railOpacity }};">
+
+      <div style="display: flex; align-items: center; gap: 8px; padding: 13px 13px 11px;">
+        <div style="position: relative; flex: 1;">
+          <input value="{{ q }}" onChange="{{ onSearch }}" placeholder="Søk enhet, sted, booking" style="width: 100%; height: 34px; padding: 0 11px 0 31px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #E8EBE7; background: rgba(0,0,0,0.34); border: 1px solid rgba(232,235,231,0.11); border-radius: 8px; outline: none; transition: border-color .22s, background .22s, box-shadow .22s;" style-focus="border-color: rgba(203,242,77,0.55); background: rgba(0,0,0,0.5); box-shadow: 0 0 0 3px rgba(203,242,77,0.12);" />
+          <span style="position: absolute; left: 12px; top: 12px; width: 8px; height: 8px; border: 1.5px solid #7C847D; border-radius: 50%; pointer-events: none;"></span>
+          <span style="position: absolute; left: 20px; top: 21px; width: 5px; height: 1.5px; background: #7C847D; transform: rotate(45deg); pointer-events: none;"></span>
+        </div>
+        <button onClick="{{ toggleRail }}" title="Skjul panelet" style="width: 30px; height: 34px; flex: 0 0 30px; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #8A928C; background: rgba(255,255,255,0.04); border: 1px solid rgba(232,235,231,0.09); border-radius: 8px; cursor: pointer; transition: color .2s, background .2s;" style-hover="color: #CBF24D; background: rgba(255,255,255,0.09);">‹</button>
+      </div>
+
+      <div style="padding: 2px 13px 13px; display: flex; flex-direction: column; gap: 11px;">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: #5C645D;">Status</span>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; background: rgba(0,0,0,0.3); border: 1px solid rgba(232,235,231,0.07); border-radius: 9px;">
+            <sc-for list="{{ statusChips }}" as="c" hint-placeholder-count="4">
+              <button onClick="{{ c.onClick }}" style="display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 28px; padding: 0 9px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; border: none; border-radius: 6px; cursor: pointer; transition: background .25s, color .25s, box-shadow .25s; background: {{ c.bg }}; color: {{ c.fg }}; box-shadow: {{ c.ring }};" style-hover="background: rgba(255,255,255,0.06);">
+                <span>{{ c.label }}</span>
+                <span style="opacity: .55;">{{ c.count }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: #5C645D;">Transportform</span>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px; padding: 3px; background: rgba(0,0,0,0.3); border: 1px solid rgba(232,235,231,0.07); border-radius: 9px;">
+            <sc-for list="{{ modeChips }}" as="m" hint-placeholder-count="3">
+              <button onClick="{{ m.onClick }}" style="display: flex; align-items: center; justify-content: center; gap: 6px; height: 28px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; border: none; border-radius: 6px; cursor: pointer; transition: background .25s, color .25s, box-shadow .25s; background: {{ m.bg }}; color: {{ m.fg }}; box-shadow: {{ m.ring }};" style-hover="background: rgba(255,255,255,0.06);">
+                <span style="flex: 0 0 auto; border: 1.5px solid currentColor; width: {{ m.size }}; height: {{ m.size }}; border-radius: {{ m.radius }}; transform: {{ m.rot }};"></span>
+                <span>{{ m.label }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div onClick="{{ toggleBatt }}" style="display: flex; align-items: center; justify-content: space-between; gap: 10px; height: 30px; padding: 0 2px; cursor: pointer;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: {{ battChip.fg }}; transition: color .25s;">Kun batteri under 50 %</span>
+          <span style="position: relative; flex: 0 0 30px; width: 30px; height: 17px; border-radius: 100px; transition: background .25s; background: {{ battChip.track }};">
+            <span style="position: absolute; top: 2.5px; width: 12px; height: 12px; border-radius: 50%; background: #E8EBE7; transition: left .25s cubic-bezier(.2,.8,.2,1); left: {{ battChip.knob }};"></span>
+          </span>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 15px; border-top: 1px solid rgba(232,235,231,0.07); background: rgba(0,0,0,0.14);">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: #6B736C;">{{ resultLabel }}</span>
+        <span onClick="{{ reset }}" style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #5C645D; cursor: pointer; transition: color .2s;" style-hover="color: #CBF24D;">Nullstill</span>
+      </div>
+
+      <div style="flex: 1; overflow-y: auto; padding: 5px 7px 12px;">
+        <sc-for list="{{ items }}" as="it" hint-placeholder-count="12">
+          <div onClick="{{ it.onClick }}" onMouseEnter="{{ it.onEnter }}" onMouseLeave="{{ it.onLeave }}" style="display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 7px; cursor: pointer; animation: rowIn .28s both; transition: background .2s ease, transform .2s cubic-bezier(.2,.8,.2,1); background: {{ it.bg }};" style-hover="background: rgba(255,255,255,0.06); transform: translateX(2px);">
+            <span style="flex: 0 0 9px; display: flex; align-items: center; justify-content: center; width: 9px; height: 9px;">
+              <span style="width: {{ it.size }}; height: {{ it.size }}; border-radius: {{ it.radius }}; transform: {{ it.rot }}; background: {{ it.tone }};"></span>
+            </span>
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: 0.04em; color: #D6DBD6;">{{ it.id }}</div>
+              <div style="margin-top: 2px; font-size: 11px; color: #6B736C; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ it.place }}</div>
+            </div>
+            <span style="flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: #4E554F;">{{ it.meta }}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}">
+          <div style="padding: 28px 14px; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: #4E554F; line-height: 1.8;">Ingen enheter matcher<br />disse filtrene</div>
+        </sc-if>
+      </div>
+    </aside>
+
+    <div style="flex: 1; position: relative; min-width: 0; background: #0A0C0B;">
+      <div ref="{{ mapRef }}" style="position: absolute; inset: 0;"></div>
+
+      <div ref="{{ curRef }}" style="position: absolute; inset: 0; pointer-events: none; opacity: 0; color: #CBF24D; transition: opacity .2s ease; z-index: 2; overflow: hidden;">
+        <div ref="{{ hRef }}" style="position: absolute; left: 0; top: 0; width: 190px; height: 1px; background: linear-gradient(90deg, rgba(203,242,77,0) 0%, rgba(203,242,77,0.14) 34%, rgba(203,242,77,0.14) 66%, rgba(203,242,77,0) 100%);"></div>
+        <div ref="{{ vRef }}" style="position: absolute; left: 0; top: 0; width: 1px; height: 190px; background: linear-gradient(180deg, rgba(203,242,77,0) 0%, rgba(203,242,77,0.14) 34%, rgba(203,242,77,0.14) 66%, rgba(203,242,77,0) 100%);"></div>
+
+        <div ref="{{ retRef }}" style="position: absolute; left: 0; top: 0; width: 46px; height: 46px;">
+          <span style="position: absolute; left: 0; top: 0; width: 10px; height: 10px; border-left: 1px solid currentColor; border-top: 1px solid currentColor;"></span>
+          <span style="position: absolute; right: 0; top: 0; width: 10px; height: 10px; border-right: 1px solid currentColor; border-top: 1px solid currentColor;"></span>
+          <span style="position: absolute; left: 0; bottom: 0; width: 10px; height: 10px; border-left: 1px solid currentColor; border-bottom: 1px solid currentColor;"></span>
+          <span style="position: absolute; right: 0; bottom: 0; width: 10px; height: 10px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor;"></span>
+          <span style="position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: currentColor;"></span>
+          <span style="position: absolute; left: 50%; top: 50%; width: 1px; height: 7px; margin: -18px 0 0 -0.5px; background: currentColor; opacity: .6;"></span>
+          <span style="position: absolute; left: 50%; top: 50%; width: 1px; height: 7px; margin: 11px 0 0 -0.5px; background: currentColor; opacity: .6;"></span>
+          <span ref="{{ lockRef }}" style="position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border: 1px solid currentColor; border-radius: 50%; opacity: 0;"></span>
+        </div>
+
+        <div ref="{{ readRef }}" style="position: absolute; left: 0; top: 0; display: flex; flex-direction: column; gap: 3px; opacity: 0; transition: opacity .18s ease; font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase; text-shadow: 0 1px 4px rgba(0,0,0,0.85);">
+          <span ref="{{ read1Ref }}" style="color: #C9CFC9;"></span>
+          <span ref="{{ read2Ref }}" style="color: currentColor; opacity: .82;"></span>
+        </div>
+      </div>
+
+      <div ref="{{ cluRef }}" style="position: absolute; left: 0; top: 0; display: flex; flex-direction: column; gap: 5px; min-width: 156px; padding: 9px 10px 10px; opacity: 0; pointer-events: none; z-index: 5; background: rgba(10,12,11,0.86); border: 1px solid rgba(232,235,231,0.1); border-radius: 8px; backdrop-filter: blur(18px) saturate(160%); -webkit-backdrop-filter: blur(18px) saturate(160%); box-shadow: 0 16px 34px rgba(0,0,0,0.5); transition: opacity .16s ease;">
+        <span ref="{{ cluHeadRef }}" style="font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: #5C645D;"></span>
+        <div ref="{{ cluListRef }}" style="display: flex; flex-direction: column; gap: 4px;"></div>
+      </div>
+
+      <sc-if value="{{ railClosed }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ toggleRail }}" style="position: absolute; left: 14px; top: 68px; display: flex; align-items: center; gap: 9px; height: 34px; padding: 0 13px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #C9CFC9; background: rgba(14,17,15,0.55); border: 1px solid rgba(232,235,231,0.1); border-radius: 9px; cursor: pointer; backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); box-shadow: 0 14px 34px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.07); z-index: 3; transition: background .22s, color .22s;" style-hover="background: rgba(24,28,25,0.7); color: #E8EBE7;">
+          <span>Filtre</span>
+          <span style="color: #CBF24D;">{{ counts.shown }}</span>
+        </div>
+      </sc-if>
+
+      <div style="position: absolute; bottom: 122px; display: flex; gap: 13px; align-items: center; left: {{ contentLeft }}; font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #98A099; text-shadow: 0 1px 4px rgba(0,0,0,0.8); pointer-events: none; z-index: 2;">
+        <span style="color: #5C645D;">farge</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #CBF24D;"></span>i bevegelse</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #7C847D;"></span>i ro</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #FF7A52;"></span>varsel</span>
+        <span style="width: 1px; height: 11px; background: rgba(232,235,231,0.14);"></span>
+        <span style="color: #5C645D;">form</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #98A099;"></span>sjø</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 8px; height: 8px; border-radius: 2px; border: 1.5px solid #98A099;"></span>bane</span>
+        <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 7px; height: 7px; border-radius: 1px; border: 1.5px solid #98A099; transform: rotate(45deg);"></span>vei</span>
+      </div>
+
+      <div style="position: absolute; display: flex; flex-direction: column; gap: 3px; padding: 3px; left: {{ ctrlLeft }}; top: {{ ctrlTop }}; background: rgba(14,17,15,0.5); border: 1px solid rgba(232,235,231,0.09); border-radius: 10px; backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); box-shadow: 0 16px 38px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.07); z-index: 3;">
+        <button onClick="{{ fitAll }}" title="Vis hele flåten" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 7px; cursor: pointer; transition: background .2s;" style-hover="background: rgba(255,255,255,0.09);">
+          <span style="width: 10px; height: 10px; border: 1.5px solid #A6AEA7;"></span>
+        </button>
+        <button onClick="{{ toggleBasemap }}" title="Stedsnavn av/på" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.06em; background: transparent; border: none; border-radius: 7px; cursor: pointer; transition: background .2s, color .2s; color: {{ labelsFg }};" style-hover="background: rgba(255,255,255,0.09);">ABC</button>
+        <button onClick="{{ zoomIn }}" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #A6AEA7; background: transparent; border: none; border-radius: 7px; cursor: pointer; transition: background .2s;" style-hover="background: rgba(255,255,255,0.09);">+</button>
+        <button onClick="{{ zoomOut }}" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #A6AEA7; background: transparent; border: none; border-radius: 7px; cursor: pointer; transition: background .2s;" style-hover="background: rgba(255,255,255,0.09);">−</button>
+      </div>
+
+      <div style="position: absolute; right: 14px; bottom: 14px; display: flex; justify-content: center; pointer-events: none; z-index: 3; left: {{ contentLeft }};">
+        <div style="display: flex; align-items: center; gap: 16px; padding: 12px 18px 13px; background: rgba(14,17,15,0.5); border: 1px solid rgba(232,235,231,0.09); border-radius: 12px; backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); box-shadow: 0 22px 50px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.07); pointer-events: auto; width: 468px; max-width: 100%;">
+          <button onClick="{{ togglePlay }}" title="Spill av siste 24 timer" style="width: 32px; height: 32px; flex: 0 0 32px; display: flex; align-items: center; justify-content: center; background: #CBF24D; border: none; border-radius: 50%; cursor: pointer; transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s;" style-hover="transform: scale(1.07); box-shadow: 0 0 0 6px rgba(203,242,77,0.14);">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; color: #0C0E0D;">{{ playIcon }}</span>
+          </button>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 9px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between;">
+              <span style="display: flex; align-items: baseline; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: #6B736C;">
+                <span>Avspilling · siste 24 t</span>
+                <span style="letter-spacing: 0.12em; transition: opacity .25s; color: #CBF24D; opacity: {{ playHintOn }};">grupper av</span>
+              </span>
+              <span style="display: flex; align-items: baseline; gap: 7px;">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #E8EBE7;">{{ clockLabel }}</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #CBF24D;">{{ tLabel }}</span>
+              </span>
+            </div>
+            <div style="position: relative; height: 16px;">
+              <div style="position: absolute; left: 0; right: 0; top: 7px; height: 3px; border-radius: 3px; background: rgba(255,255,255,0.13);"></div>
+              <div style="position: absolute; left: 0; top: 7px; height: 3px; border-radius: 3px; background: linear-gradient(90deg, rgba(203,242,77,0.35), #CBF24D); transition: width .12s linear; width: {{ tPct }};"></div>
+              <div style="position: absolute; left: 0; right: 0; top: 4px; display: flex; justify-content: space-between; pointer-events: none;">
+                <span style="width: 1px; height: 9px; background: rgba(255,255,255,0.16);"></span>
+                <span style="width: 1px; height: 9px; background: rgba(255,255,255,0.16);"></span>
+                <span style="width: 1px; height: 9px; background: rgba(255,255,255,0.16);"></span>
+                <span style="width: 1px; height: 9px; background: rgba(255,255,255,0.16);"></span>
+                <span style="width: 1px; height: 9px; background: rgba(255,255,255,0.16);"></span>
+              </div>
+              <div style="position: absolute; top: 2px; width: 13px; height: 13px; margin-left: -6.5px; border-radius: 50%; background: #E8EBE7; box-shadow: 0 0 0 5px rgba(203,242,77,0.18), 0 2px 6px rgba(0,0,0,0.6); transition: left .12s linear; left: {{ tPct }};"></div>
+              <input type="range" min="0" max="100" step="0.5" value="{{ t }}" onChange="{{ onSlide }}" style="position: absolute; left: -4px; right: -4px; top: -4px; width: calc(100% + 8px); height: 24px; margin: 0; opacity: 0; cursor: ew-resize;" />
+            </div>
+            <div style="display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; color: #4E554F;">
+              <span>−24 t</span>
+              <span>−18</span>
+              <span>−12</span>
+              <span>−6</span>
+              <span>nå</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}">
+        <div style="position: absolute; right: 14px; top: 68px; bottom: 122px; width: 340px; display: flex; flex-direction: column; background: rgba(14,17,15,0.56); border: 1px solid rgba(232,235,231,0.09); border-radius: 12px; backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); box-shadow: 0 26px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07); animation: panelIn .34s cubic-bezier(.2,.8,.2,1) both; overflow: hidden; z-index: 4;">
+          <div style="padding: 15px 16px 12px; border-bottom: 1px solid rgba(232,235,231,0.07);">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+              <div>
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; letter-spacing: 0.05em; color: #E8EBE7;">{{ sel.id }}</div>
+                <div style="margin-top: 5px; font-size: 12px; color: #8A928C; text-wrap: pretty;">{{ sel.place }}</div>
+              </div>
+              <span onClick="{{ clearSel }}" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #5C645D; cursor: pointer; padding: 2px 4px; transition: color .2s;" style-hover="color: #FF7A52;">✕</span>
+            </div>
+            <div style="margin-top: 11px; display: flex; gap: 5px; flex-wrap: wrap;">
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 8px; border-radius: 2px; background: {{ sel.tagBg }}; color: {{ sel.tone }};">{{ sel.statusLabel }}</span>
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 8px; border-radius: 2px; background: #101413; color: #8A928C;">{{ sel.mode }}</span>
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 8px; border-radius: 2px; background: #101413; color: #8A928C;">{{ sel.booking }}</span>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr;">
+            <sc-for list="{{ sel.metrics }}" as="m" hint-placeholder-count="4">
+              <div style="padding: 12px 16px; border-right: 1px solid #151816; border-bottom: 1px solid #151816;">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: #4E554F;">{{ m.k }}</div>
+                <div style="margin-top: 5px; font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #E8EBE7;">{{ m.v }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="flex: 1; overflow-y: auto; padding: 14px 16px 16px;">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: #4E554F; margin-bottom: 13px;">Hendelseslogg</div>
+            <sc-for list="{{ sel.events }}" as="e" hint-placeholder-count="4">
+              <div style="position: relative; padding: 0 0 17px 19px; border-left: 1px solid #1B201C;">
+                <span style="position: absolute; left: -4.5px; top: 3px; width: 8px; height: 8px; border-radius: 50%; border: 2px solid #0A0C0B; background: {{ e.tone }};"></span>
+                <div style="display: flex; align-items: baseline; gap: 8px;">
+                  <span style="flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: #CBF24D;">{{ e.time }}</span>
+                  <span style="font-size: 12px; color: #D6DBD6; text-wrap: pretty;">{{ e.label }}</span>
+                </div>
+                <div style="margin-top: 3px; font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.06em; color: #5C645D;">{{ e.place }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="padding: 11px 16px; border-top: 1px solid #151816;">
+            <button onClick="{{ copyLink }}" style="width: 100%; padding: 9px; font-family: Archivo, sans-serif; font-size: 12px; font-weight: 500; border: none; border-radius: 3px; cursor: pointer; transition: background .25s, color .25s, transform .2s; background: {{ shareBg }}; color: {{ shareFg }};" style-hover="transform: translateY(-1px);">{{ shareLabel }}</button>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;reticle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;presisjon&quot;,&quot;minimal&quot;,&quot;av&quot;],&quot;default&quot;:&quot;presisjon&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Musepeker&quot;},&quot;wake&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Bevegelse&quot;},&quot;clustering&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Gruppering&quot;},&quot;clusterPx&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:48,&quot;min&quot;:28,&quot;max&quot;:96,&quot;step&quot;:4,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Gruppering&quot;},&quot;trails&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;fra zoom&quot;,&quot;valgt&quot;,&quot;alle&quot;,&quot;av&quot;],&quot;default&quot;:&quot;fra zoom&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Kart&quot;},&quot;fleetSize&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:60,&quot;min&quot;:12,&quot;max&quot;:320,&quot;step&quot;:4,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Flåte&quot;}}">
+class Component extends DCLogic {
+  state = { status: "all", modes: [], lowBatt: false, q: "", sel: null, hover: null, t: 100, playing: false, labels: false, rail: true, copied: false, zoom: 4 };
+
+  hubs = {
+    oslo: { n: "Oslo", c: [10.7522, 59.9139] }, fredrikstad: { n: "Fredrikstad", c: [10.9298, 59.2181] },
+    kristiansand: { n: "Kristiansand", c: [8.0182, 58.1467] }, stavanger: { n: "Stavanger", c: [5.7331, 58.97] },
+    bergen: { n: "Bergen", c: [5.3221, 60.3913] }, alesund: { n: "Ålesund", c: [6.1495, 62.4722] },
+    trondheim: { n: "Trondheim", c: [10.3951, 63.4305] }, goteborg: { n: "Göteborg", c: [11.9746, 57.7089] },
+    helsingborg: { n: "Helsingborg", c: [12.6945, 56.0465] }, malmo: { n: "Malmö", c: [13.0038, 55.605] },
+    kobenhavn: { n: "København", c: [12.5683, 55.6761] }, aarhus: { n: "Aarhus", c: [10.2039, 56.1629] },
+    hirtshals: { n: "Hirtshals", c: [9.96, 57.59] }, kiel: { n: "Kiel", c: [10.1228, 54.3233] },
+    hamburg: { n: "Hamburg", c: [9.9937, 53.5511] }, bremerhaven: { n: "Bremerhaven", c: [8.5798, 53.5396] },
+    rotterdam: { n: "Rotterdam", c: [4.1401, 51.9502] }, antwerpen: { n: "Antwerpen", c: [4.4025, 51.2194] }
+  };
+
+  lanes = [
+    ["oslo", "rotterdam", "sjø"], ["oslo", "hamburg", "sjø"], ["goteborg", "rotterdam", "sjø"],
+    ["kiel", "goteborg", "sjø"], ["hirtshals", "kristiansand", "sjø"], ["bergen", "bremerhaven", "sjø"],
+    ["stavanger", "hamburg", "sjø"], ["alesund", "bergen", "sjø"], ["antwerpen", "oslo", "sjø"],
+    ["goteborg", "malmo", "bane"], ["kobenhavn", "malmo", "bane"], ["hamburg", "aarhus", "bane"],
+    ["oslo", "goteborg", "bane"], ["helsingborg", "malmo", "bane"], ["hamburg", "bremerhaven", "bane"],
+    ["oslo", "fredrikstad", "vei"], ["stavanger", "kristiansand", "vei"], ["hamburg", "kiel", "vei"],
+    ["rotterdam", "antwerpen", "vei"], ["aarhus", "hirtshals", "vei"], ["trondheim", "alesund", "vei"],
+    ["oslo", "trondheim", "vei"], ["kobenhavn", "aarhus", "vei"], ["bergen", "stavanger", "vei"]
+  ];
+
+  cargo = ["stykkgods", "kjøl 2–8 °C", "papirruller", "byggevarer", "sjømat", "maskindeler", "møbler", "kjemi UN1263", "tørrlast", "batterier"];
+
+  hero = [
+    { id: "BLDR-0917", status: "alert", mode: "vei", lane: ["rotterdam", "antwerpen"], p: 0.22, batt: 94, temp: 7, booking: "BK-40877", cargo: "elektronikk",
+      place: "40 km fra levering · Rotterdam",
+      events: [ { time: "03:17", label: "Dør åpnet 40 km før leveringsadressen", place: "E19 · 51,79° N 4,42° Ø", tone: "#FF7A52" },
+                { time: "03:19", label: "Varsel sendt til driftssenteret", place: "Balder Cloud", tone: "#F2C14E" },
+                { time: "02:04", label: "Underveis · dør lukket", place: "A15 · 51,88° N 4,60° Ø", tone: "#7C847D" },
+                { time: "23:40", label: "Gate ut · bekreftet av enheten", place: "Rotterdam terminal", tone: "#7C847D" } ] },
+    { id: "BLDR-4471", status: "alert", mode: "sjø", lane: ["goteborg", "rotterdam"], p: 0.98, batt: 91, temp: 9, booking: "BK-40712", cargo: "maskindeler",
+      place: "Rotterdam havn · terminalansvar",
+      events: [ { time: "22:10", label: "Støt 6,2 g · sabotasjesikret logg", place: "Rotterdam havn · 51,95° N 4,14° Ø", tone: "#FF7A52" },
+                { time: "21:44", label: "Gate inn · bekreftet av enheten", place: "Rotterdam terminal", tone: "#7C847D" } ] },
+    { id: "BLDR-2481", status: "moving", mode: "sjø", lane: ["oslo", "rotterdam"], p: 0.46, batt: 98, temp: 5, booking: "BK-40921", cargo: "papirruller",
+      place: "Skagerrak · underveis Oslo → Rotterdam",
+      events: [ { time: "14:02", label: "Dør lukket · lasteområde", place: "Oslo havn · 59,91° N 10,75° Ø", tone: "#CBF24D" },
+                { time: "16:20", label: "Gate ut · bekreftet av enheten", place: "Oslo havn", tone: "#7C847D" },
+                { time: "22:40", label: "Underveis · dør lukket", place: "Skagerrak · 58,30° N 9,80° Ø", tone: "#7C847D" } ] },
+    { id: "BLDR-5093", status: "idle", mode: "bane", lane: ["aarhus", "aarhus"], p: 1, batt: 97, temp: 8, booking: "BK-40640", cargo: "byggevarer",
+      place: "Aarhus terminal · står på dag 2",
+      events: [ { time: "dag 2", label: "Står i avgiftsbelagt terminal", place: "Aarhus · gratis til dag 5", tone: "#F2C14E" },
+                { time: "dag 0", label: "Gate inn · bekreftet av enheten", place: "Aarhus terminal", tone: "#7C847D" } ] },
+    { id: "BLDR-6612", status: "idle", mode: "sjø", lane: ["bergen", "bergen"], p: 1, batt: 41, temp: 2, booking: "ubooket", cargo: "tom",
+      place: "Bergen · utestabel",
+      events: [ { time: "12:05", label: "Batteri under flåtemedian", place: "Bergen · 60,39° N 5,32° Ø", tone: "#F2C14E" },
+                { time: "08:00", label: "Våknet etter kald stabel", place: "Bergen", tone: "#7C847D" } ] }
+  ];
+
+  // Esri sine canvas-fliser krever ingen nøkkel og har ingen vannmerke.
+  tileBase = "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}";
+  tileRef = "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}";
+
+  styleFor(labels) {
+    const sources = { base: { type: "raster", tileSize: 256, tiles: [this.tileBase], attribution: "Fliser © Esri · mockdata" } };
+    const layers = [
+      { id: "bg", type: "background", paint: { "background-color": "#0A0C0B" } },
+      { id: "base", type: "raster", source: "base", paint: { "raster-opacity": 0.62, "raster-saturation": -0.6, "raster-contrast": 0.12, "raster-brightness-max": 0.86 } }
+    ];
+    if (labels) {
+      sources.ref = { type: "raster", tileSize: 256, tiles: [this.tileRef] };
+      layers.push({ id: "ref", type: "raster", source: "ref", paint: { "raster-opacity": 0.5 } });
+    }
+    return { version: 8, sources: sources, layers: layers };
+  }
+
+  rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+  lanePath(a, b, r) {
+    const A = this.hubs[a].c, B = this.hubs[b].c;
+    if (a === b) return [[A[0] + (r() - 0.5) * 0.14, A[1] + (r() - 0.5) * 0.08]];
+    const out = [A];
+    const n = 3, dx = B[0] - A[0], dy = B[1] - A[1];
+    for (let i = 1; i <= n; i++) {
+      const f = i / (n + 1), bow = Math.sin(f * Math.PI) * (r() - 0.5) * 0.9;
+      out.push([A[0] + dx * f - dy * bow * 0.35, A[1] + dy * f + dx * bow * 0.22]);
+    }
+    out.push(B);
+    return out;
+  }
+
+  buildFleet() {
+    const size = Math.max(this.hero.length + 4, this.props.fleetSize ?? 60);
+    const r = this.rng(20260902);
+    const list = [];
+    this.hero.forEach((h, i) => list.push(Object.assign({}, h, { path: this.lanePath(h.lane[0], h.lane[1], this.rng(9000 + i)), cargoLabel: h.cargo })));
+    for (let i = list.length; i < size; i++) {
+      const lane = this.lanes[Math.floor(r() * this.lanes.length)];
+      const roll = r();
+      const status = roll < 0.08 ? "alert" : roll < 0.62 ? "moving" : "idle";
+      const from = lane[0], to = status === "idle" ? lane[0] : lane[1];
+      const path = this.lanePath(from, to, this.rng(4000 + i * 13));
+      const p = status === "idle" ? 1 : 0.12 + r() * 0.8;
+      const batt = r() < 0.09 ? 22 + Math.floor(r() * 26) : 82 + Math.floor(r() * 18);
+      const temp = -2 + Math.floor(r() * 18);
+      const dest = this.hubs[lane[1]].n, orig = this.hubs[lane[0]].n;
+      const id = "BLDR-" + String(1000 + Math.floor(r() * 8900));
+      const cargo = this.cargo[Math.floor(r() * this.cargo.length)];
+      const place = status === "idle"
+        ? this.hubs[from].n + (r() < 0.5 ? " depot · ledig" : " terminal · venter på booking")
+        : orig + " → " + dest + (status === "alert" ? " · avvik" : "");
+      const hh = String(Math.floor(r() * 24)).padStart(2, "0"), mm = String(Math.floor(r() * 60)).padStart(2, "0");
+      const events = status === "alert"
+        ? [ { time: hh + ":" + mm, label: r() < 0.5 ? "Dør åpnet utenfor godkjent sone" : "Støt " + (3 + Math.floor(r() * 6)) + ",1 g registrert", place: orig + " → " + dest, tone: "#FF7A52" },
+            { time: "−1t", label: "Underveis · dør lukket", place: orig, tone: "#7C847D" } ]
+        : status === "moving"
+        ? [ { time: hh + ":" + mm, label: "Underveis · " + lane[2] + " · dør lukket", place: orig + " → " + dest, tone: "#7C847D" },
+            { time: "−6t", label: "Gate ut · bekreftet av enheten", place: orig + " terminal", tone: "#CBF24D" } ]
+        : [ { time: hh + ":" + mm, label: batt < 50 ? "Batteri under flåtemedian" : "Bekreftet tom · klar for ny booking", place: this.hubs[from].n, tone: batt < 50 ? "#F2C14E" : "#CBF24D" } ];
+      list.push({ id: id, status: status, mode: lane[2], path: path, p: p, batt: batt, temp: temp,
+        booking: status === "idle" && r() < 0.6 ? "ubooket" : "BK-" + (40100 + Math.floor(r() * 900)),
+        cargoLabel: cargo, place: place, events: events });
+    }
+    const seen = {};
+    return list.filter(a => (seen[a.id] ? false : (seen[a.id] = true)));
+  }
+
+  // Form = transportform, farge = status. To variabler, to kanaler.
+  shape(mode) {
+    if (mode === "bane") return { s: 10, r: "2px", t: "none" };
+    if (mode === "vei") return { s: 9, r: "1px", t: "rotate(45deg)" };
+    return { s: 11, r: "50%", t: "none" };
+  }
+
+  tone(s) { return s === "alert" ? "#FF7A52" : s === "moving" ? "#CBF24D" : "#8A928C"; }
+  tagBg(s) { return s === "alert" ? "rgba(255,122,82,0.14)" : s === "moving" ? "rgba(203,242,77,0.13)" : "#101413"; }
+  statusNo(s) { return s === "alert" ? "varsel" : s === "moving" ? "i bevegelse" : "i ro"; }
+  frac(a, t) { return Math.max(0, Math.min(1, a.p * (0.32 + 0.68 * (t / 100)))); }
+
+  posAt(path, f) {
+    if (path.length < 2) return path[0];
+    const seg = []; let total = 0;
+    for (let i = 1; i < path.length; i++) { const d = Math.hypot(path[i][0] - path[i-1][0], path[i][1] - path[i-1][1]); seg.push(d); total += d; }
+    let want = total * f, acc = 0;
+    for (let i = 0; i < seg.length; i++) {
+      if (acc + seg[i] >= want || i === seg.length - 1) {
+        const q = seg[i] === 0 ? 1 : Math.min(1, (want - acc) / seg[i]);
+        return [path[i][0] + (path[i+1][0] - path[i][0]) * q, path[i][1] + (path[i+1][1] - path[i][1]) * q];
+      }
+      acc += seg[i];
+    }
+    return path[path.length - 1];
+  }
+
+  // Utsnitt av ruten mellom to andeler — brukes til den korte halen bak enheten.
+  sliceAt(path, f0, f1) {
+    if (path.length < 2 || f1 <= f0) return null;
+    const seg = []; let total = 0;
+    for (let i = 1; i < path.length; i++) { const d = Math.hypot(path[i][0] - path[i-1][0], path[i][1] - path[i-1][1]); seg.push(d); total += d; }
+    const d0 = total * Math.max(0, f0), d1 = total * Math.min(1, f1);
+    const out = [this.posAt(path, Math.max(0, f0))];
+    let acc = 0;
+    for (let i = 0; i < seg.length; i++) {
+      const end = acc + seg[i];
+      if (end > d0 && end < d1) out.push(path[i + 1]);
+      acc = end;
+    }
+    out.push(this.posAt(path, Math.min(1, f1)));
+    return out.length > 1 ? out : null;
+  }
+
+  trailAt(path, f) {
+    if (path.length < 2) return null;
+    const seg = []; let total = 0;
+    for (let i = 1; i < path.length; i++) { const d = Math.hypot(path[i][0] - path[i-1][0], path[i][1] - path[i-1][1]); seg.push(d); total += d; }
+    const want = total * f; let acc = 0;
+    const out = [path[0]];
+    for (let i = 0; i < seg.length; i++) { if (acc + seg[i] > want) break; acc += seg[i]; out.push(path[i+1]); }
+    out.push(this.posAt(path, f));
+    return out.length > 1 ? out : null;
+  }
+
+  matches(a) {
+    const st = this.state;
+    if (st.status !== "all" && a.status !== st.status) return false;
+    if (st.modes.length && st.modes.indexOf(a.mode) < 0) return false;
+    if (st.lowBatt && a.batt >= 50) return false;
+    const q = st.q.trim().toLowerCase();
+    if (q && (a.id + " " + a.place + " " + a.mode + " " + a.booking + " " + (a.cargoLabel || "")).toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  }
+
+  componentDidMount() {
+    this.fleet = this.buildFleet();
+    this.forceUpdate();
+    const init = () => {
+      if (this.mapReady) return;
+      this.map.resize();
+      this.buildMarkers();
+      this.mapReady = true;
+      this.installLayers();
+      this.syncMap();
+      this.map.fitBounds(this.bounds, { padding: this.pad(), duration: 0 });
+    };
+    const boot = () => {
+      const el = this.mapEl && this.mapEl.current;
+      if (!window.maplibregl || !el || !el.clientWidth || !el.clientHeight) { this.bootTimer = setTimeout(boot, 80); return; }
+      this.map = new window.maplibregl.Map({
+        container: el, style: this.styleFor(false),
+        bounds: this.bounds, fitBoundsOptions: { padding: this.pad() },
+        attributionControl: { compact: true }, dragRotate: false
+      });
+      if (window.ResizeObserver) {
+        this.ro = new ResizeObserver(() => { if (this.map) this.map.resize(); });
+        this.ro.observe(el);
+      }
+      this.map.on("load", init);
+      this.map.on("styledata", () => { if (this.mapReady) { this.installLayers(); this.syncMap(); } });
+      this.map.on("move", () => this.queueSync());
+      this.map.on("zoomend", () => this.setState({ zoom: this.map.getZoom() }));
+      this.readyPoll = setInterval(() => {
+        if (!this.map) return;
+        if (!this.mapReady) { init(); return; }
+        if (this.map.getLayer("trails-line")) { clearInterval(this.readyPoll); return; }
+        this.installLayers(); this.syncMap();
+      }, 250);
+    };
+    boot();
+    this.installCursor();
+  }
+
+  // Presisjonssiktet erstatter musepekeren over kartet: fritt sikte som låser magnetisk på nærmeste enhet.
+  installCursor() {
+    const el = this.mapEl && this.mapEl.current;
+    if (!el) { this.curTimer = setTimeout(() => this.installCursor(), 120); return; }
+    this.cur = { x: -200, y: -200, tx: -200, ty: -200, s: 0.86, rot: 0, on: false, down: false, lockT: 0 };
+    const set = e => {
+      const r = el.getBoundingClientRect();
+      this.cur.tx = e.clientX - r.left; this.cur.ty = e.clientY - r.top;
+      if (!this.cur.on) { this.cur.x = this.cur.tx; this.cur.y = this.cur.ty; }
+      this.cur.on = true;
+    };
+    this.curHandlers = [
+      [el, "pointermove", set], [el, "pointerenter", set],
+      [el, "pointerleave", () => { this.cur.on = false; }],
+      [el, "pointerdown", () => { this.cur.down = true; }],
+      [window, "pointerup", () => { this.cur.down = false; }],
+      [window, "blur", () => { this.cur.on = false; this.cur.down = false; }]
+    ];
+    this.curHandlers.forEach(h => h[0].addEventListener(h[1], h[2]));
+    this.cursorLoop();
+  }
+
+  cursorLoop = () => {
+    this.rafCursor = requestAnimationFrame(this.cursorLoop);
+    const c = this.cur, root = this.curEl && this.curEl.current, ret = this.retEl && this.retEl.current;
+    if (!c || !root || !ret) return;
+    const mode = this.props.reticle ?? "presisjon";
+    const el = this.mapEl.current;
+    if (el) el.parentNode.setAttribute("data-reticle", mode === "av" ? "off" : "on");
+    if (mode === "av") { root.style.opacity = 0; return; }
+
+    let tx = c.tx, ty = c.ty, locked = false, tone = "#CBF24D", cluHot = null;
+    const hov = this.state.hover;
+    if (hov && this.map && this.fleet) {
+      const a = this.fleet.find(x => x.id === hov);
+      if (a) {
+        const p = this.map.project(this.posAt(a.path, this.frac(a, this.state.t)));
+        if (Math.hypot(p.x - c.tx, p.y - c.ty) < 110) {
+          tx = p.x; ty = p.y; locked = true;
+          tone = a.status === "alert" ? "#FF7A52" : a.status === "moving" ? "#CBF24D" : "#B9C1BA";
+        }
+      }
+    }
+    if (!locked && this.hoverClu != null) {
+      const slot = this.clusterPool && this.clusterPool[this.hoverClu];
+      if (slot && slot.pos && this.map) {
+        const p = this.map.project(slot.pos);
+        if (Math.hypot(p.x - c.tx, p.y - c.ty) < 130) {
+          tx = p.x; ty = p.y; locked = true; cluHot = slot;
+          tone = slot.alert ? "#FF7A52" : "#CBF24D";
+        }
+      }
+    }
+    const k = locked ? 0.26 : 0.4;
+    c.x += (tx - c.x) * k; c.y += (ty - c.y) * k;
+    const ts = c.down ? 0.68 : locked ? 1.26 : 0.86;
+    const tr = locked ? 45 : 0;
+    c.s += (ts - c.s) * 0.22; c.rot += (tr - c.rot) * 0.18;
+
+    root.style.opacity = c.on ? 1 : 0;
+    root.style.color = tone;
+    ret.style.transform = "translate3d(" + (c.x - 23) + "px," + (c.y - 23) + "px,0) rotate(" + c.rot.toFixed(2) + "deg) scale(" + c.s.toFixed(3) + ")";
+
+    const h = this.hEl && this.hEl.current, v = this.vEl && this.vEl.current;
+    const guides = mode === "presisjon" ? (c.down ? 0.3 : locked ? 0.9 : 0.6) : 0;
+    if (h) { h.style.transform = "translate3d(" + (c.x - 95).toFixed(1) + "px," + c.y.toFixed(1) + "px,0)"; h.style.opacity = guides; }
+    if (v) { v.style.transform = "translate3d(" + c.x.toFixed(1) + "px," + (c.y - 95).toFixed(1) + "px,0)"; v.style.opacity = guides; }
+
+    const lock = this.lockEl && this.lockEl.current;
+    if (lock) {
+      if (locked && !c.wasLocked) { lock.style.animation = "none"; void lock.offsetWidth; lock.style.animation = "lockSweep .5s cubic-bezier(.2,.8,.2,1) both"; }
+      if (!locked && c.wasLocked) lock.style.animation = "none";
+    }
+    c.wasLocked = locked;
+
+    const read = this.readEl && this.readEl.current;
+    if (read && this.map) {
+      const w = el ? el.clientWidth : 0, hh = el ? el.clientHeight : 0;
+      const flipX = c.x > w - 170, flipY = c.y > hh - 60;
+      read.style.transform = "translate3d(" + (c.x + (flipX ? -160 : 26)) + "px," + (c.y + (flipY ? -46 : 16)) + "px,0)";
+      read.style.textAlign = flipX ? "right" : "left";
+      read.style.alignItems = flipX ? "flex-end" : "flex-start";
+      read.style.opacity = (locked || c.down) && c.on && !cluHot ? 1 : 0;
+      if ((locked || c.down) && (!this.readT || performance.now() - this.readT > 70)) {
+        this.readT = performance.now();
+        const ll = this.map.unproject([c.x, c.y]);
+        const r1 = this.read1El && this.read1El.current, r2 = this.read2El && this.read2El.current;
+        if (r1) r1.textContent = Math.abs(ll.lat).toFixed(3) + "° " + (ll.lat >= 0 ? "N" : "S") + "  " + Math.abs(ll.lng).toFixed(3) + "° " + (ll.lng >= 0 ? "Ø" : "V");
+        if (r2) r2.textContent = "z " + this.map.getZoom().toFixed(2) + " · " + (this.shownCount || 0) + " i sikte";
+      }
+    }
+
+    // Diskré medlemsliste når siktet står på en gruppe.
+    const clu = this.cluEl && this.cluEl.current;
+    if (clu) {
+      const show = !!cluHot && c.on && !c.down;
+      clu.style.opacity = show ? 1 : 0;
+      if (show) {
+        const w = el ? el.clientWidth : 0, hgt = el ? el.clientHeight : 0;
+        const bw = clu.offsetWidth || 190, bh = clu.offsetHeight || 120;
+        // Tidslinjepanelet ligger nederst; vend lista opp når den ellers havner bak det.
+        const flipX = c.x + 34 + bw > w - 20;
+        const flipY = c.y + 22 + bh > hgt - 128;
+        clu.style.transform = "translate3d(" + (c.x + (flipX ? -bw - 30 : 34)) + "px," + (c.y + (flipY ? -bh - 18 : 22)) + "px,0)";
+        const key = cluHot.members.map(m => m.a.id).join(",");
+        if (key !== this.cluKey) {
+          this.cluKey = key;
+          const head = this.cluHeadEl.current, list = this.cluListEl.current;
+          if (head) head.textContent = cluHot.members.length + " enheter i gruppen";
+          if (list) {
+            list.textContent = "";
+            cluHot.members.slice(0, 6).forEach(m => {
+              const row = document.createElement("div");
+              row.style.cssText = "display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.05em;color:#C9CFC9;";
+              const sh = this.shape(m.a.mode);
+              const dot = document.createElement("span");
+              dot.style.cssText = "flex:0 0 7px;width:7px;height:7px;border-radius:" + sh.r + ";transform:" + sh.t + ";background:" + this.tone(m.a.status) + ";";
+              const id = document.createElement("span");
+              id.style.cssText = "flex:1;";
+              id.textContent = m.a.id;
+              const meta = document.createElement("span");
+              meta.style.cssText = "color:#5C645D;text-transform:uppercase;letter-spacing:.1em;font-size:8.5px;";
+              meta.textContent = m.a.mode;
+              row.appendChild(dot); row.appendChild(id); row.appendChild(meta);
+              list.appendChild(row);
+            });
+            if (cluHot.members.length > 6) {
+              const more = document.createElement("div");
+              more.style.cssText = "margin-top:2px;font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#4E554F;";
+              more.textContent = "+" + (cluHot.members.length - 6) + " flere · klikk for å zoome";
+              list.appendChild(more);
+            }
+          }
+        }
+      } else if (this.cluKey) { this.cluKey = null; }
+    }
+  };
+
+  componentWillUnmount() {
+    clearTimeout(this.bootTimer); clearTimeout(this.copyTimer); clearTimeout(this.curTimer); clearInterval(this.tick); clearInterval(this.readyPoll);
+    cancelAnimationFrame(this.rafCursor);
+    if (this.curHandlers) this.curHandlers.forEach(h => h[0].removeEventListener(h[1], h[2]));
+    if (this.ro) this.ro.disconnect();
+    if (this.map) this.map.remove();
+  }
+
+  bounds = [[2.6, 51.0], [16.4, 64.2]];
+
+  // Glasspanelene ligger over kartet, så innrammingen må holde flåten i det synlige feltet.
+  pad() { return { top: 86, bottom: 132, left: this.state.rail ? 322 : 40, right: this.state.sel ? 372 : 60 }; }
+
+  queueSync() {
+    if (this.syncQueued) return;
+    this.syncQueued = true;
+    requestAnimationFrame(() => { this.syncQueued = false; this.syncMap(); });
+  }
+
+  installLayers() {
+    const map = this.map;
+    if (!map || !map.isStyleLoaded()) return;
+    if (!map.getSource("trails")) map.addSource("trails", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    // Ett lag per transportform: sjø heltrukket, bane stiplet, vei punktert.
+    const dash = { "trails-line": null, "trails-rail": [1.6, 1.3], "trails-road": [0.1, 2] };
+    const mode = { "trails-line": "sjø", "trails-rail": "bane", "trails-road": "vei" };
+    Object.keys(dash).forEach(id => {
+      if (map.getLayer(id)) return;
+      const paint = { "line-color": ["get", "color"], "line-width": ["case", ["get", "sel"], 2.2, 1.1],
+                      "line-opacity": ["case", ["get", "sel"], 0.95, 0.24] };
+      if (dash[id]) paint["line-dasharray"] = dash[id];
+      if (id === "trails-road") paint["line-width"] = ["case", ["get", "sel"], 3, 1.8];
+      map.addLayer({ id: id, type: "line", source: "trails", filter: ["==", ["get", "mode"], mode[id]],
+        paint: paint, layout: { "line-cap": "round", "line-join": "round" } });
+    });
+
+    // Hale: line-gradient krever lineMetrics og faste fargestopp, derfor ett lag per status.
+    if (!map.getSource("wake")) map.addSource("wake", { type: "geojson", lineMetrics: true, data: { type: "FeatureCollection", features: [] } });
+    const wakes = { "wake-moving": ["moving", "203,242,77"], "wake-alert": ["alert", "255,122,82"] };
+    Object.keys(wakes).forEach(id => {
+      if (map.getLayer(id)) return;
+      const rgb = wakes[id][1];
+      map.addLayer({ id: id, type: "line", source: "wake", filter: ["==", ["get", "status"], wakes[id][0]],
+        paint: { "line-width": ["case", ["get", "hot"], 4, 2.6], "line-blur": 0.4,
+          "line-gradient": ["interpolate", ["linear"], ["line-progress"],
+            0, "rgba(" + rgb + ",0)", 0.55, "rgba(" + rgb + ",0.35)", 1, "rgba(" + rgb + ",0.95)"] },
+        layout: { "line-cap": "round", "line-join": "round" } });
+    });
+  }
+
+  makeMarkerEl(size) {
+    const host = document.createElement("div");
+    host.style.cssText = "width:" + size + "px;height:" + size + "px;";
+    const inner = document.createElement("div");
+    inner.style.cssText = "position:absolute;left:0;top:0;display:flex;align-items:center;cursor:none;will-change:transform,opacity;transform-origin:" + (size / 2) + "px " + (size / 2) + "px;transition:opacity .45s cubic-bezier(.2,.8,.2,1),transform .45s cubic-bezier(.2,.8,.2,1);";
+    host.appendChild(inner);
+    return { host: host, inner: inner };
+  }
+
+  buildMarkers() {
+    this.markers = {};
+    this.fleet.forEach(a => {
+      const el = this.makeMarkerEl(11);
+      const ring = document.createElement("div");
+      ring.style.cssText = "position:absolute;left:1px;top:1px;width:9px;height:9px;border-radius:50%;pointer-events:none;";
+      const dot = document.createElement("div");
+      const sh = this.shape(a.mode);
+      dot.style.cssText = "width:" + sh.s + "px;height:" + sh.s + "px;margin:" + ((11 - sh.s) / 2) + "px;border-radius:" + sh.r + ";border:2px solid #0A0C0B;transform:" + sh.t + ";transition:background .3s,box-shadow .3s;";
+      const label = document.createElement("div");
+      label.style.cssText = "position:absolute;left:16px;top:-8px;white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:.06em;padding:3px 7px;border-radius:2px;background:rgba(10,12,11,.94);border:1px solid #22271F;color:#E8EBE7;opacity:0;transform-origin:left center;transform:translateX(-4px) scale(.7);transition:opacity .22s,transform .22s;pointer-events:none;";
+      label.textContent = a.id + " · " + a.mode;
+      el.inner.appendChild(ring); el.inner.appendChild(dot); el.inner.appendChild(label);
+      el.inner.addEventListener("mouseenter", () => this.setState({ hover: a.id }));
+      el.inner.addEventListener("mouseleave", () => this.setState({ hover: null }));
+      el.inner.addEventListener("click", e => { e.stopPropagation(); this.select(a.id); });
+      const marker = new window.maplibregl.Marker({ element: el.host, anchor: "center" })
+        .setLngLat(this.posAt(a.path, this.frac(a, this.state.t))).addTo(this.map);
+      this.markers[a.id] = { marker: marker, host: el.host, inner: el.inner, dot: dot, ring: ring, label: label };
+    });
+    this.clusterPool = [];
+  }
+
+  clusterSlot(i) {
+    if (this.clusterPool[i]) return this.clusterPool[i];
+    const el = this.makeMarkerEl(34);
+    const disc = document.createElement("div");
+    disc.style.cssText = "width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.02em;color:#E8EBE7;background:rgba(10,12,11,.88);border:1px solid #2E352F;backdrop-filter:blur(4px);transition:border-color .25s,background .25s,color .25s,box-shadow .25s,letter-spacing .25s;";
+    el.inner.appendChild(disc);
+    el.inner.addEventListener("click", e => {
+      e.stopPropagation();
+      const slot = this.clusterPool[i];
+      if (slot && slot.members && slot.members.length) this.zoomToMembers(slot.members);
+    });
+    el.inner.addEventListener("mouseenter", () => { this.hoverClu = i; this.syncMap(); });
+    el.inner.addEventListener("mouseleave", () => { if (this.hoverClu === i) this.hoverClu = null; this.syncMap(); });
+    const marker = new window.maplibregl.Marker({ element: el.host, anchor: "center" }).setLngLat([0, 0]).addTo(this.map);
+    this.clusterPool[i] = { marker: marker, host: el.host, inner: el.inner, disc: disc, members: [] };
+    return this.clusterPool[i];
+  }
+
+  zoomToMembers(members) {
+    try {
+      if (!this.map || !members || !members.length) return;
+      let minX = 180, minY = 90, maxX = -180, maxY = -90;
+      members.forEach(m => {
+        const p = m && m.pos; if (!p) return;
+        minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]);
+        minY = Math.min(minY, p[1]); maxY = Math.max(maxY, p[1]);
+      });
+      if (maxX < minX) return;
+      // Én tett gruppe gir null utstrekning — utvid litt så innrammingen alltid har noe å jobbe med.
+      const m0 = Math.max(0.02, (maxX - minX) * 0.25), m1 = Math.max(0.012, (maxY - minY) * 0.25);
+      this.map.fitBounds([[minX - m0, minY - m1], [maxX + m0, maxY + m1]],
+        { padding: this.pad(), maxZoom: 9.6, duration: 900, essential: true });
+    } catch (e) {}
+  }
+
+  syncMap() {
+    if (!this.mapReady) return;
+    const st = this.state, map = this.map;
+    const trailMode = this.props.trails ?? "fra zoom";
+    // Grupper er meningsløse mens flåten beveger seg — de slås av under avspilling.
+    const clusterOn = (this.props.clustering ?? true) && !st.q.trim() && !st.playing;
+    const cellPx = this.props.clusterPx ?? 48;
+    const zoom = map.getZoom();
+
+    const live = [];
+    this.fleet.forEach(a => {
+      const on = this.matches(a);
+      const pos = this.posAt(a.path, this.frac(a, st.t));
+      if (on) live.push({ a: a, pos: pos });
+      const m = this.markers[a.id];
+      if (m) m.marker.setLngLat(pos);
+    });
+
+    // Rutenettgruppering i skjermpiksler: enheter som ville overlappe vises som én gruppe.
+    const groups = {};
+    if (clusterOn) {
+      live.forEach(e => {
+        const p = map.project(e.pos);
+        const key = Math.floor(p.x / cellPx) + ":" + Math.floor(p.y / cellPx);
+        (groups[key] = groups[key] || []).push(e);
+      });
+    } else {
+      live.forEach((e, i) => { groups["s" + i] = [e]; });
+    }
+
+    const clustered = {};
+    const clusterList = [];
+    Object.keys(groups).forEach(k => {
+      const g = groups[k];
+      if (g.length < 2) return;
+      if (g.some(e => e.a.id === st.sel)) return;
+      g.forEach(e => { clustered[e.a.id] = true; });
+      let lng = 0, lat = 0, alert = 0, moving = 0;
+      g.forEach(e => { lng += e.pos[0]; lat += e.pos[1]; if (e.a.status === "alert") alert++; if (e.a.status === "moving") moving++; });
+      clusterList.push({ pos: [lng / g.length, lat / g.length], n: g.length, alert: alert, moving: moving, members: g });
+    });
+
+    const feats = [], wakeFeats = [];
+    const wakeOn = this.props.wake ?? true;
+    const wakeLen = st.playing ? 0.11 : 0.05;
+    this.fleet.forEach(a => {
+      const m = this.markers[a.id]; if (!m) return;
+      const on = this.matches(a), isSel = st.sel === a.id, isHot = isSel || st.hover === a.id;
+      const hidden = !on || clustered[a.id];
+      m.inner.style.opacity = hidden ? (on ? 0 : 0.06) : 1;
+      m.inner.style.transform = hidden ? "scale(0.4)" : (isHot ? "scale(1.5)" : "scale(1)");
+      m.host.style.zIndex = isHot ? 6 : 1;
+      m.host.style.pointerEvents = hidden ? "none" : "auto";
+      const c = this.tone(a.status);
+      m.dot.style.background = c;
+      m.dot.style.boxShadow = isHot ? "0 0 0 5px " + (a.status === "alert" ? "rgba(255,122,82,.22)" : "rgba(203,242,77,.2)") : "none";
+      const pulse = a.status === "alert" && !hidden;
+      m.ring.style.background = pulse ? c : "transparent";
+      m.ring.style.animation = pulse ? "ping 1.9s cubic-bezier(0,.2,.6,1) infinite" : "none";
+      m.label.style.opacity = isHot && !hidden ? 1 : 0;
+      m.label.style.transform = isHot && !hidden ? "translateX(0) scale(.7)" : "translateX(-4px) scale(.7)";
+
+      const wantTrail = trailMode === "av" ? false
+        : isSel || st.hover === a.id ? true
+        : trailMode === "valgt" ? false
+        : hidden || a.status === "idle" ? false
+        : trailMode === "alle" ? true
+        : zoom >= 5.4;
+      if (wantTrail) {
+        const tr = this.trailAt(a.path, this.frac(a, st.t));
+        if (tr) feats.push({ type: "Feature", properties: { color: c, sel: isSel, mode: a.mode }, geometry: { type: "LineString", coordinates: tr } });
+      }
+      if (wakeOn && !hidden && a.status !== "idle" && a.path.length > 1) {
+        const f = this.frac(a, st.t);
+        const wk = this.sliceAt(a.path, f - wakeLen, f);
+        if (wk) wakeFeats.push({ type: "Feature", properties: { status: a.status, hot: isHot }, geometry: { type: "LineString", coordinates: wk } });
+      }
+    });
+
+    clusterList.forEach((c, i) => {
+      const slot = this.clusterSlot(i);
+      slot.members = c.members;
+      slot.pos = c.pos;
+      slot.alert = c.alert;
+      slot.marker.setLngLat(c.pos);
+      slot.host.style.display = "";
+      const hot = this.hoverClu === i;
+      slot.host.style.zIndex = hot ? 5 : 3;
+      slot.host.style.pointerEvents = "auto";
+      slot.inner.style.opacity = 1;
+      slot.inner.style.transform = hot ? "scale(1.16)" : "scale(1)";
+      slot.disc.textContent = c.n;
+      const border = c.alert ? "#FF7A52" : c.moving ? "#3F4A3A" : "#2E352F";
+      slot.disc.style.borderColor = hot ? (c.alert ? "#FF7A52" : "#CBF24D") : border;
+      slot.disc.style.color = hot ? (c.alert ? "#FFB49B" : "#E8EBE7") : (c.alert ? "#FF9E80" : "#D6DBD6");
+      slot.disc.style.background = c.alert ? "rgba(38,17,12,.86)" : hot ? "rgba(18,22,17,.92)" : "rgba(10,12,11,.86)";
+      slot.disc.style.boxShadow = hot ? "0 0 0 4px " + (c.alert ? "rgba(255,122,82,.14)" : "rgba(203,242,77,.13)") : "none";
+      slot.disc.style.letterSpacing = hot ? ".08em" : ".02em";
+    });
+    for (let i = clusterList.length; i < this.clusterPool.length; i++) {
+      const slot = this.clusterPool[i];
+      slot.inner.style.opacity = 0;
+      slot.inner.style.transform = "scale(0.5)";
+      slot.host.style.pointerEvents = "none";
+      slot.host.style.display = "none";
+    }
+
+    let src = map.getSource("trails");
+    if (!src) { this.installLayers(); src = map.getSource("trails"); }
+    if (src) src.setData({ type: "FeatureCollection", features: feats });
+    const wsrc = map.getSource("wake");
+    if (wsrc) wsrc.setData({ type: "FeatureCollection", features: wakeFeats });
+    this.shownCount = live.length;
+  }
+
+  componentDidUpdate() { this.syncMap(); }
+
+  select(id) {
+    const a = this.fleet.find(x => x.id === id); if (!a) return;
+    this.setState({ sel: id, copied: false }, () => {
+      if (this.map) this.map.easeTo({
+        center: this.posAt(a.path, this.frac(a, this.state.t)),
+        zoom: Math.max(this.map.getZoom(), 6.4), offset: [-160, 0],
+        duration: 1250, easing: t => 1 - Math.pow(1 - t, 3)
+      });
+    });
+  }
+
+  fitAll = () => {
+    this.setState({ sel: null });
+    if (this.map) this.map.fitBounds(this.bounds, { padding: this.pad(), duration: 1100 });
+  };
+
+  toggleBasemap = () => {
+    const labels = !this.state.labels;
+    this.setState({ labels: labels });
+    if (this.map) { this.map.setStyle(this.styleFor(labels)); this.map.once("idle", () => { this.installLayers(); this.syncMap(); }); }
+  };
+
+  togglePlay = () => {
+    if (this.state.playing) { clearInterval(this.tick); this.setState({ playing: false }); return; }
+    this.setState(s => ({ playing: true, t: s.t >= 99.5 ? 0 : s.t }));
+    this.tick = setInterval(() => this.setState(s => {
+      const nt = s.t + 0.5;
+      if (nt >= 100) { clearInterval(this.tick); return { t: 100, playing: false }; }
+      return { t: nt };
+    }), 40);
+  };
+
+  copyLink = () => {
+    const id = this.state.sel;
+    try { if (navigator.clipboard) navigator.clipboard.writeText("https://vakt.demo/spor/" + id); } catch (e) {}
+    clearTimeout(this.copyTimer);
+    this.setState({ copied: true });
+    this.copyTimer = setTimeout(() => this.setState({ copied: false }), 2000);
+  };
+
+  renderVals() {
+    if (!this.mapEl) this.mapEl = React.createRef();
+    if (!this.curEl) {
+      this.curEl = React.createRef(); this.retEl = React.createRef(); this.hEl = React.createRef();
+      this.vEl = React.createRef(); this.readEl = React.createRef(); this.read1El = React.createRef();
+      this.read2El = React.createRef(); this.lockEl = React.createRef();
+      this.cluEl = React.createRef(); this.cluHeadEl = React.createRef(); this.cluListEl = React.createRef();
+    }
+    if (!this.fleet) this.fleet = [];
+    const st = this.state;
+    const counts = { all: this.fleet.length, moving: 0, idle: 0, alert: 0 };
+    this.fleet.forEach(a => counts[a.status]++);
+
+    const seg = (on, acc) => ({
+      bg: on ? (acc === "alert" ? "rgba(255,122,82,0.16)" : "rgba(203,242,77,0.16)") : "transparent",
+      fg: on ? (acc === "alert" ? "#FF9E80" : "#CBF24D") : "#7C847D",
+      ring: on ? "inset 0 0 0 1px " + (acc === "alert" ? "rgba(255,122,82,0.4)" : "rgba(203,242,77,0.4)") : "none"
+    });
+
+    const statusChips = [
+      { k: "all", l: "alle", n: counts.all }, { k: "moving", l: "bevegelse", n: counts.moving },
+      { k: "idle", l: "i ro", n: counts.idle }, { k: "alert", l: "varsel", n: counts.alert }
+    ].map(c => Object.assign({ label: c.l, count: c.n,
+      onClick: () => this.setState({ status: c.k, sel: null }) }, seg(st.status === c.k, c.k === "alert" ? "alert" : "lime")));
+
+    const modeChips = ["sjø", "bane", "vei"].map(m => {
+      const sh = this.shape(m);
+      return Object.assign({ label: m, size: sh.s - 2 + "px", radius: sh.r, rot: sh.t,
+        onClick: () => this.setState(s => ({ modes: s.modes.indexOf(m) >= 0 ? s.modes.filter(x => x !== m) : s.modes.concat([m]), sel: null })) }, seg(st.modes.indexOf(m) >= 0, "lime"));
+    });
+
+    const order = { alert: 0, moving: 1, idle: 2 };
+    const list = this.fleet.filter(a => this.matches(a)).sort((x, y) => order[x.status] - order[y.status] || x.id.localeCompare(y.id));
+    const items = list.map(a => ({
+      id: a.id, place: a.place, tone: this.tone(a.status),
+      size: this.shape(a.mode).s - 3 + "px", radius: this.shape(a.mode).r, rot: this.shape(a.mode).t,
+      meta: a.mode + " · " + a.batt + "%",
+      bg: st.sel === a.id ? "#141815" : "transparent",
+      onClick: () => this.select(a.id),
+      onEnter: () => this.setState({ hover: a.id }),
+      onLeave: () => this.setState({ hover: null })
+    }));
+
+    const a = this.fleet.find(x => x.id === st.sel);
+    const sel = a ? {
+      id: a.id, place: a.place, mode: a.mode, booking: a.booking, events: a.events,
+      statusLabel: this.statusNo(a.status), tone: this.tone(a.status), tagBg: this.tagBg(a.status),
+      metrics: [
+        { k: "Temperatur", v: a.temp + " °C" }, { k: "Batteri", v: a.batt + " %" },
+        { k: "Dør", v: a.status === "alert" ? "ÅPEN" : "lukket" }, { k: "Last", v: a.cargoLabel || "tørrlast" }
+      ]
+    } : null;
+
+    const hours = Math.round((100 - st.t) * 0.24);
+    counts.shown = list.length;
+    return {
+      counts: counts, statusChips: statusChips, modeChips: modeChips, items: items, sel: sel,
+      battChip: { fg: st.lowBatt ? "#CBF24D" : "#7C847D", track: st.lowBatt ? "rgba(203,242,77,0.55)" : "rgba(255,255,255,0.14)", knob: st.lowBatt ? "15.5px" : "2.5px" },
+      toggleBatt: () => this.setState(s => ({ lowBatt: !s.lowBatt, sel: null })),
+      hasSel: !!sel, empty: this.fleet.length > 0 && list.length === 0,
+      resultLabel: list.length + " av " + counts.all + " enheter",
+      q: st.q, onSearch: e => this.setState({ q: e.target.value, sel: null }),
+      t: st.t, tLabel: hours === 0 ? "nå" : "−" + hours + " t",
+      onSlide: e => { clearInterval(this.tick); this.setState({ t: parseFloat(e.target.value), playing: false }); },
+      playIcon: st.playing ? "❚❚" : "▶", togglePlay: this.togglePlay,
+      playHintOn: st.playing ? 0.85 : 0,
+      clearSel: () => this.setState({ sel: null }),
+      reset: () => this.setState({ status: "all", modes: [], lowBatt: false, q: "", sel: null }),
+      fitAll: this.fitAll, toggleBasemap: this.toggleBasemap,
+      labelsFg: st.labels ? "#CBF24D" : "#A6AEA7",
+      zoomIn: () => this.map && this.map.zoomIn({ duration: 500 }),
+      zoomOut: () => this.map && this.map.zoomOut({ duration: 500 }),
+      railT: st.rail ? "translateX(0)" : "translateX(-104%)", railOpacity: st.rail ? 1 : 0, railClosed: !st.rail,
+      contentLeft: st.rail ? "308px" : "14px",
+      ctrlLeft: st.rail ? "308px" : "14px", ctrlTop: st.rail ? "68px" : "112px",
+      tPct: st.t + "%",
+      clockLabel: (() => {
+        const d = new Date(Date.UTC(2026, 8, 2, 9, 20, 0) - (100 - st.t) * 0.24 * 3600000);
+        return String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0");
+      })(),
+      toggleRail: () => this.setState(s => ({ rail: !s.rail })),
+      copyLink: this.copyLink,
+      shareLabel: st.copied ? "Lenke kopiert ✓" : "Del sporingslenke",
+      shareBg: st.copied ? "rgba(203,242,77,0.14)" : "#CBF24D",
+      shareFg: st.copied ? "#CBF24D" : "#0C0E0D",
+      mapRef: this.mapEl, curRef: this.curEl, retRef: this.retEl, hRef: this.hEl, vRef: this.vEl,
+      readRef: this.readEl, read1Ref: this.read1El, read2Ref: this.read2El, lockRef: this.lockEl,
+      cluRef: this.cluEl, cluHeadRef: this.cluHeadEl, cluListRef: this.cluListEl
+    };
+  }
+}
+</script>
+</body>
+</html>

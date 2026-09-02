@@ -1,0 +1,42 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "stream",
+  "globalEnv": ["NODE_ENV"],
+  "globalPassThroughEnv": [
+    "BARENTSWATCH_CLIENT_ID",
+    "BARENTSWATCH_CLIENT_SECRET",
+    "AIS_CLIENT_ID",
+    "CLIENT_SECRET",
+    "ENTUR_CLIENT_NAME",
+    "PORT",
+    "DB_PATH",
+    "CORS_ORIGINS",
+    "LOG_LEVEL",
+    "FLEET_SEA",
+    "FLEET_RAIL",
+    "FLEET_ROAD",
+    "NEXT_PUBLIC_INGEST_URL",
+    "INGEST_URL"
+  ],
+  "tasks": {
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "lint": {
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    }
+  }
+}

@@ -1,0 +1,33 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# deps / build
+node_modules/
+dist/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# data
+data/
+*.sqlite
+*.sqlite-*
+
+# tests
+coverage/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# os / editor
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# fly
+.fly/
