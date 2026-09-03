@@ -7,12 +7,10 @@ import { openDb } from "../src/db/sqlite";
 
 function make() {
   const config = loadConfig({ FLEET_SEA: "1", FLEET_RAIL: "1", FLEET_ROAD: "2", CORS_ORIGINS: "https://vakt.example" });
-  const service = new FleetService({ db: openDb(":memory:"), config });
-  service.boot();
   const hub = new SseHub();
-  const service2 = service as unknown as { deps: { eventCursor?: () => string } };
-  service2.deps.eventCursor = () => hub.lastId;
+  const service = new FleetService({ db: openDb(":memory:"), config, eventCursor: () => hub.lastId });
   service.onEvent((e) => hub.broadcast(e));
+  service.boot();
   const app = createApp({
     config,
     service,
@@ -55,8 +53,9 @@ describe("api", () => {
     const { app, hub } = make();
     expect((await app.request("/api/health")).status).toBe(200);
     hub.broadcast({ type: "heartbeat", at: 1 });
+    const first = hub.lastId; // boot() already emitted a coverage event, so ids are not 1-based here
     hub.broadcast({ type: "heartbeat", at: 2 });
-    const first = `${hub.bootId}:1`;
+    const second = hub.lastId;
     const res = await app.request("/api/events", { headers: { "Last-Event-ID": first } });
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/event-stream");
@@ -66,9 +65,12 @@ describe("api", () => {
     const text = new TextDecoder().decode(value);
     expect(text).toContain("event: hello");
     await reader.cancel();
-    expect(hub.replayAfter(first)!.map((m) => m.id)).toEqual([`${hub.bootId}:2`]);
+    expect(hub.replayAfter(first)!.map((m) => m.id)).toEqual([second]);
     expect(hub.replayAfter("other:1")).toBeNull();
     expect(hub.replayAfter(null)).toEqual([]);
+    expect(hub.replayAfter(`${hub.bootId}:0`)!.length).toBe(hub.replayAfter(`${hub.bootId}:0`)!.length);
+    expect(hub.replayAfter(`${hub.bootId}:99`)).toEqual([]);
+    expect(hub.replayAfter(`${hub.bootId}:x`)).toBeNull();
 
     // A malformed or foreign id must trigger a resync rather than a silent gap.
     for (const bad of ["123", "other:1"]) {
@@ -89,7 +91,7 @@ describe("api", () => {
     const { app, hub } = make();
     hub.broadcast({ type: "heartbeat", at: 1 });
     const res = await app.request("/api/snapshot?tracks=0", { headers: { Origin: "https://vakt.example" } });
-    expect(res.headers.get("x-event-id")).toBe(`${hub.bootId}:1`);
+    expect(res.headers.get("x-event-id")).toBe(hub.lastId);
     expect(res.headers.get("access-control-expose-headers")).toContain("X-Event-Id");
   });
 

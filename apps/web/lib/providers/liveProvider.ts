@@ -67,6 +67,8 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
   let refetching = false;
   let lastTouch = 0;
   let snapshotCursor: string | null = null;
+  /** Events that arrive while a snapshot is in flight; replayed on top of it so nothing is lost. */
+  let held: [string, string][] | null = null;
 
   const subs = new Set<(s: FleetSnapshotView) => void>();
   const statusSubs = new Set<(s: ProviderStatus, at: number | null) => void>();
@@ -112,6 +114,7 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
   const fetchSnapshot = async (): Promise<boolean> => {
     if (refetching) return true;
     refetching = true;
+    held = [];
     try {
       const res = await fetch(`${base}/api/snapshot`, { cache: "no-store" });
       if (!res.ok) throw new Error(`snapshot ${res.status}`);
@@ -126,10 +129,17 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
       return false;
     } finally {
       refetching = false;
+      const replay = held;
+      held = null;
+      if (replay) for (const [type, data] of replay) handleEvent(type, data);
     }
   };
 
   const handleEvent = (type: string, data: string) => {
+    if (held) {
+      held.push([type, data]);
+      return;
+    }
     let ev: IngestEvent;
     try {
       ev = JSON.parse(data) as IngestEvent;

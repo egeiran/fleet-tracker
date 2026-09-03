@@ -49,13 +49,18 @@ export class EnturPoller {
       this.stats.vehicles = vehicles.length;
       this.onVehicles(vehicles);
     } catch (e) {
-      const wasOk = this.stats.ok;
       this.stats.ok = false;
       this.stats.consecutiveFailures++;
       this.stats.lastError = errMessage(e);
-      log.warn("poll failed", { error: this.stats.lastError });
-      if (wasOk || this.stats.consecutiveFailures <= 3) this.onStateChange?.(this.stats);
+      log.warn("poll failed", { error: this.stats.lastError, consecutive: this.stats.consecutiveFailures });
+      try {
+        this.onStateChange?.(this.stats);
+      } catch (cbError) {
+        log.error("state callback failed", { error: errMessage(cbError) });
+      }
+    } finally {
+      // Always reschedule, even if a callback threw.
+      if (!this.stopped) this.timer = setTimeout(() => void this.tick(), this.intervalMs);
     }
-    if (!this.stopped) this.timer = setTimeout(() => void this.tick(), this.intervalMs);
   }
 }

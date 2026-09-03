@@ -46,12 +46,24 @@ export class SseHub {
     this.clients.delete(client);
   }
 
-  /** Returns the messages after `lastId`, or null when the id fell out of the ring. */
+  /**
+   * Messages after `lastId`, `[]` when the client is current, or null when the id is from another
+   * boot or fell out of the ring (caller sends `resync`). Sequence-based, so `<boot>:0` works too.
+   */
   replayAfter(lastId: string | null): SseMessage[] | null {
     if (!lastId) return [];
-    const idx = this.ring.findIndex((m) => m.id === lastId);
-    if (idx < 0) return null;
-    return this.ring.slice(idx + 1);
+    const sep = lastId.indexOf(":");
+    if (sep < 0 || lastId.slice(0, sep) !== this.bootId) return null;
+    const seq = Number(lastId.slice(sep + 1));
+    if (!Number.isInteger(seq) || seq < 0) return null;
+    if (seq >= this.counter) return [];
+    const firstSeq = this.counter - this.ring.length + 1;
+    if (seq < firstSeq - 1) return null;
+    return this.ring.slice(seq - (firstSeq - 1));
+  }
+
+  sequenceOf(id: string): number {
+    return Number(id.slice(id.indexOf(":") + 1));
   }
 
   broadcast(e: IngestEvent): void {
@@ -60,8 +72,7 @@ export class SseHub {
     if (this.ring.length > RING) this.ring.splice(0, this.ring.length - RING);
     for (const [c, state] of this.clients) {
       if (state.pending >= MAX_PENDING) {
-        this.clients.delete(c);
-        c.close();
+        this.drop(c);
         continue;
       }
       state.pending++;
@@ -69,10 +80,17 @@ export class SseHub {
         .then(() => {
           state.pending--;
         })
-        .catch(() => {
-          this.clients.delete(c);
-          c.close();
-        });
+        .catch(() => this.drop(c));
+    }
+  }
+
+  /** Runs from timers and the stream loop; a throwing close() must never take the worker down. */
+  private drop(c: SseClient): void {
+    this.clients.delete(c);
+    try {
+      c.close();
+    } catch {
+      /* socket already gone */
     }
   }
 

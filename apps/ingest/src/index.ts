@@ -31,10 +31,9 @@ const entur = new EnturPoller(
   config.bbox,
   (v) => service.onTrains(v),
   (s) => {
-    if (s.ok) return;
-    // First failures during startup stay "starting"; three in a row means the source is down.
-    const state = service.coverage.rail.state === "starting" && s.consecutiveFailures < 3 ? "starting" : "degraded";
-    service.setRailState({ state, detail: "Entur svarer ikke" });
+    // Transient hiccups are ignored; three consecutive failures mean the source is down.
+    if (s.ok || s.consecutiveFailures < 3) return;
+    service.setRailState({ state: "degraded", detail: "Entur svarer ikke" });
   },
 );
 

@@ -4,7 +4,7 @@ import { streamSSE } from "hono/streaming";
 import type { Health } from "@vakt/domain";
 import type { Config } from "../config";
 import type { FleetService } from "../core/service";
-import type { SseHub } from "./sseHub";
+import type { SseHub, SseMessage } from "./sseHub";
 
 export interface AppDeps {
   config: Config;
@@ -87,8 +87,18 @@ export function createApp(deps: AppDeps): Hono {
         const finished = new Promise<void>((resolve) => {
           done = resolve;
         });
+        // Live frames that arrive while the replay is being written are held back so the
+        // client never sees an older replayed frame after a newer live one.
+        let replaying = true;
+        let queued: SseMessage[] = [];
         const client = {
-          send: (m: { id: string; event: string; data: string }) => stream.writeSSE(m),
+          send: (m: SseMessage) => {
+            if (replaying) {
+              queued.push(m);
+              return;
+            }
+            return stream.writeSSE(m);
+          },
           close: () => {
             done();
             // A dropped slow reader should not keep its socket: queued frames would otherwise wait for it to drain.
@@ -109,8 +119,16 @@ export function createApp(deps: AppDeps): Hono {
           data: JSON.stringify({ type: "hello", version: deps.service.version, generatedAt: Date.now() }),
         });
         const replay = rawLastId === null ? [] : lastIdValid ? deps.hub.replayAfter(rawLastId) : null;
-        if (replay === null) await stream.writeSSE({ event: "resync", data: JSON.stringify({ type: "resync" }) });
-        else for (const m of replay) await stream.writeSSE(m);
+        if (replay === null) {
+          // Carry the current cursor so a later reconnect does not resend the stale id.
+          await stream.writeSSE({ id: deps.hub.lastId, event: "resync", data: JSON.stringify({ type: "resync" }) });
+        } else {
+          for (const m of replay) await stream.writeSSE(m);
+        }
+        const lastSeq = replay?.length ? deps.hub.sequenceOf(replay[replay.length - 1]!.id) : -1;
+        for (const m of queued) if (deps.hub.sequenceOf(m.id) > lastSeq) await stream.writeSSE(m);
+        queued = [];
+        replaying = false;
         await finished;
         deps.hub.remove(client);
       },
