@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+!.env.example
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/data
+*.sqlite
+*.sqlite-*
+apps/web
+design_handoff_fleet_map
+**/test-results
+**/playwright-report

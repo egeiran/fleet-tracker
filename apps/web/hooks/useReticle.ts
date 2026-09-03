@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, type RefObject } from "react";
+import { createRef, useEffect, useState, type RefObject } from "react";
 import { coordReadout, LOCK_RADIUS, shapeFor, type Unit } from "@vakt/domain";
 import type { FleetStore } from "@/lib/fleetStore";
 import { selectReticleEnabled } from "@/lib/selectors";
@@ -19,20 +19,22 @@ export interface ReticleRefs {
   cluList: RefObject<HTMLDivElement | null>;
 }
 
+/** One stable refs object per mount, so the reticle effect does not restart on every render. */
 export function useReticleRefs(): ReticleRefs {
-  return {
-    root: useRef<HTMLDivElement>(null),
-    h: useRef<HTMLDivElement>(null),
-    v: useRef<HTMLDivElement>(null),
-    ret: useRef<HTMLDivElement>(null),
-    lock: useRef<HTMLSpanElement>(null),
-    read: useRef<HTMLDivElement>(null),
-    read1: useRef<HTMLSpanElement>(null),
-    read2: useRef<HTMLSpanElement>(null),
-    clu: useRef<HTMLDivElement>(null),
-    cluHead: useRef<HTMLSpanElement>(null),
-    cluList: useRef<HTMLDivElement>(null),
-  };
+  const [refs] = useState<ReticleRefs>(() => ({
+    root: createRef<HTMLDivElement>(),
+    h: createRef<HTMLDivElement>(),
+    v: createRef<HTMLDivElement>(),
+    ret: createRef<HTMLDivElement>(),
+    lock: createRef<HTMLSpanElement>(),
+    read: createRef<HTMLDivElement>(),
+    read1: createRef<HTMLSpanElement>(),
+    read2: createRef<HTMLSpanElement>(),
+    clu: createRef<HTMLDivElement>(),
+    cluHead: createRef<HTMLSpanElement>(),
+    cluList: createRef<HTMLDivElement>(),
+  }));
+  return refs;
 }
 
 const TONE = { moving: "#CBF24D", idle: "#B9C1BA", alert: "#FF7A52" } as const;
@@ -103,6 +105,17 @@ export function useReticle(
       const root = refs.root.current;
       const ret = refs.ret.current;
       if (!map || !root || !ret) return;
+      // Pointer off the surface: fade out once, then skip the per-frame style writes.
+      if (!cur.on) {
+        if (root.style.opacity !== "0") {
+          root.style.opacity = "0";
+          const clu = refs.clu.current;
+          if (clu) clu.style.opacity = "0";
+          cur.wasLocked = false;
+          cluKey = null;
+        }
+        return;
+      }
       const state = store.getState();
 
       let tx = cur.tx;

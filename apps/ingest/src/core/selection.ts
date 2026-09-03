@@ -1,4 +1,13 @@
-import { fnv1a, haversineM, isStationaryNavStatus, shipTypeInfo, type CarrierTrain, type CarrierVessel } from "@vakt/domain";
+import {
+  deriveTrainStatus,
+  deriveVesselStatus,
+  fnv1a,
+  haversineM,
+  shipTypeInfo,
+  STALE_AFTER_MS,
+  type CarrierTrain,
+  type CarrierVessel,
+} from "@vakt/domain";
 import { isTrain, isVessel, type Observed } from "./carrierRegistry";
 
 export interface VesselPickContext {
@@ -33,15 +42,20 @@ export function vesselEligible(v: CarrierVessel, ctx: Pick<VesselPickContext, "p
   return false;
 }
 
+/** Same rule the unit builder uses, so the balancer's "moving" matches what the UI shows. */
 export function isVesselMoving(v: CarrierVessel): boolean {
-  return (v.sog ?? 0) >= 1 && !(isStationaryNavStatus(v.navStatus) && (v.sog ?? 0) < 1.5);
+  return deriveVesselStatus({ sog: v.sog, navStatus: v.navStatus, displacement10minM: 0, stale: false, prev: null }) === "moving";
+}
+
+export function vesselClass(v: CarrierVessel): ReturnType<typeof shipTypeInfo>["class"] {
+  return shipTypeInfo(v.shipType).class;
 }
 
 function vesselScore(v: CarrierVessel, o: Observed, ctx: VesselPickContext): number {
   const moving = isVesselMoving(v);
   let s = 0;
   if (ctx.preferMoving ? moving : !moving) s += 3;
-  if (ctx.now - o.lastSeen < 10 * 60_000) s += 2;
+  if (ctx.now - o.lastSeen < STALE_AFTER_MS) s += 2;
   if (v.destination) s += 1;
   if ((v.lengthM ?? 0) >= 80) s += 1;
   s -= (ctx.bandCounts[latBand(o.point[1])] ?? 0) * 0.6;
@@ -69,16 +83,15 @@ export interface TrainPickContext {
 }
 
 export function isTrainMoving(o: Observed & { carrier: CarrierTrain }): boolean {
-  if ((o.carrier.speed ?? 0) >= 5) return true;
-  if (!o.prevPoint) return false;
-  return haversineM([o.prevPoint[0], o.prevPoint[1]], [o.point[0], o.point[1]]) >= 100;
+  const displacementM = o.prevPoint ? haversineM([o.prevPoint[0], o.prevPoint[1]], [o.point[0], o.point[1]]) : 0;
+  return deriveTrainStatus({ displacementM, speed: o.carrier.speed, stale: false }) === "moving";
 }
 
 export function pickTrain(unitId: string, pool: Observed[], ctx: TrainPickContext): Observed | null {
   let best: { o: Observed; s: number; h: number } | null = null;
   for (const o of pool) {
     if (!isTrain(o) || ctx.taken.has(o.key)) continue;
-    if (ctx.now - o.lastSeen > 10 * 60_000) continue;
+    if (ctx.now - o.lastSeen > STALE_AFTER_MS) continue;
     const c = o.carrier;
     let s = 0;
     if (isTrainMoving(o)) s += 3;

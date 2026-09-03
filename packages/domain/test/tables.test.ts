@@ -72,6 +72,7 @@ describe("time", () => {
     expect(formatEventTime(now - 3_600_000, now)).toBe("20:00");
     expect(formatEventTime(now - 23 * 3_600_000, now)).toBe("i går 22:00");
     expect(formatEventTime(now - 3 * 86_400_000, now)).toBe("30.08 21:00");
+    expect(formatEventTime(now + 120_000, now)).toBe("21:02");
   });
   it("formatClock renders HH:MM in Oslo time", () => {
     expect(formatClock(Date.UTC(2026, 8, 2, 9, 20))).toBe("11:20");

@@ -120,10 +120,12 @@
   font-size: 14px;
   color: var(--c-text);
 }
+.simRow {
+  display: flex;
+  justify-content: flex-end;
+  padding: 7px 12px 0;
+}
 .simNote {
-  position: absolute;
-  right: 12px;
-  bottom: 7px;
   font-family: var(--font-mono);
   font-size: 8.5px;
   letter-spacing: 0.14em;

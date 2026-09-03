@@ -49,12 +49,6 @@ export function normalizeDestination(raw: string | null | undefined): string | u
     if (NOISE.has(key)) continue;
     const hit = DESTINATION_ALIASES[key];
     if (hit) return hit;
-    // "NO BGO" / "NO.SVG" style: country prefix with separator.
-    const m = /^(NO|SE|DK|DE|NL|BE)([A-Z]{3})$/.exec(key);
-    if (m) {
-      const loc = DESTINATION_ALIASES[key];
-      if (loc) return loc;
-    }
   }
   return undefined;
 }

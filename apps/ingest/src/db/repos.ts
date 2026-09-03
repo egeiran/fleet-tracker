@@ -59,24 +59,29 @@ export class PositionsRepo {
   pruneBefore(ts: number): number {
     return Number(this.db.prepare("DELETE FROM positions WHERE ts < ?").run(ts).changes);
   }
+  private countStmt: ReturnType<DatabaseSync["prepare"]> | null = null;
   count(): number {
-    return Number((this.db.prepare("SELECT COUNT(*) AS n FROM positions").get() as { n: number }).n);
+    this.countStmt ??= this.db.prepare("SELECT COUNT(*) AS n FROM positions");
+    return Number((this.countStmt.get() as { n: number }).n);
   }
 }
 
 export class CarriersRepo {
-  constructor(private db: DatabaseSync) {}
+  private upsertStmt;
+  private getStmt;
+  constructor(db: DatabaseSync) {
+    this.upsertStmt = db.prepare(
+      `INSERT INTO carriers (key, kind, name, meta, first_seen, last_seen) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET name = excluded.name, meta = excluded.meta, last_seen = excluded.last_seen`,
+    );
+    this.getStmt = db.prepare("SELECT meta FROM carriers WHERE key = ?");
+  }
   upsert(key: string, carrier: Carrier, seenAt: number): void {
     const name = carrier.kind === "vessel" ? carrier.name : carrier.kind === "train" ? (carrier.publicCode ?? carrier.lineName ?? null) : carrier.label;
-    this.db
-      .prepare(
-        `INSERT INTO carriers (key, kind, name, meta, first_seen, last_seen) VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(key) DO UPDATE SET name = excluded.name, meta = excluded.meta, last_seen = excluded.last_seen`,
-      )
-      .run(key, carrier.kind, name, JSON.stringify(carrier), seenAt, seenAt);
+    this.upsertStmt.run(key, carrier.kind, name, JSON.stringify(carrier), seenAt, seenAt);
   }
   get(key: string): Carrier | null {
-    const row = this.db.prepare("SELECT meta FROM carriers WHERE key = ?").get(key) as { meta: string } | undefined;
+    const row = this.getStmt.get(key) as { meta: string } | undefined;
     if (!row) return null;
     try {
       return JSON.parse(row.meta) as Carrier;
@@ -87,24 +92,28 @@ export class CarriersRepo {
 }
 
 export class AssignmentsRepo {
-  constructor(private db: DatabaseSync) {}
+  private openStmt;
+  private closeStmt;
+  private listOpenStmt;
+  private pruneStmt;
+  constructor(db: DatabaseSync) {
+    this.openStmt = db.prepare(
+      "INSERT OR REPLACE INTO assignments (unit_id, slot, carrier_key, from_ts, to_ts, reason) VALUES (?, ?, ?, ?, NULL, ?)",
+    );
+    this.closeStmt = db.prepare("UPDATE assignments SET to_ts = ?, reason = ? WHERE unit_id = ? AND to_ts IS NULL");
+    this.listOpenStmt = db.prepare("SELECT * FROM assignments WHERE to_ts IS NULL ORDER BY slot");
+    this.pruneStmt = db.prepare("DELETE FROM assignments WHERE to_ts IS NOT NULL AND to_ts < ?");
+  }
   open(unitId: string, slot: number, carrierKey: string, fromTs: number, reason: string): void {
-    this.db
-      .prepare("INSERT OR REPLACE INTO assignments (unit_id, slot, carrier_key, from_ts, to_ts, reason) VALUES (?, ?, ?, ?, NULL, ?)")
-      .run(unitId, slot, carrierKey, fromTs, reason);
+    this.openStmt.run(unitId, slot, carrierKey, fromTs, reason);
   }
   close(unitId: string, toTs: number, reason: string): void {
-    this.db.prepare("UPDATE assignments SET to_ts = ?, reason = ? WHERE unit_id = ? AND to_ts IS NULL").run(toTs, reason, unitId);
+    this.closeStmt.run(toTs, reason, unitId);
   }
   listOpen(): AssignmentRow[] {
-    return this.db.prepare("SELECT * FROM assignments WHERE to_ts IS NULL ORDER BY slot").all() as unknown as AssignmentRow[];
+    return this.listOpenStmt.all() as unknown as AssignmentRow[];
   }
-  history(unitId: string, since: number): AssignmentRow[] {
-    return this.db
-      .prepare("SELECT * FROM assignments WHERE unit_id = ? AND (to_ts IS NULL OR to_ts >= ?) ORDER BY from_ts")
-      .all(unitId, since) as unknown as AssignmentRow[];
-  }
-  pruneClosedBefore(ts: number): void {
-    this.db.prepare("DELETE FROM assignments WHERE to_ts IS NOT NULL AND to_ts < ?").run(ts);
+  pruneClosedBefore(ts: number): number {
+    return Number(this.pruneStmt.run(ts).changes);
   }
 }

@@ -36,7 +36,6 @@ export function createApp(deps: AppDeps): Hono {
   app.use("/api/*", async (c, next) => {
     await next();
     c.header("X-Content-Type-Options", "nosniff");
-    c.header("Vary", "Origin");
   });
 
   app.get("/", (c) => c.text("vakt ingest · see /api/health"));
@@ -48,17 +47,13 @@ export function createApp(deps: AppDeps): Hono {
   });
 
   app.get("/api/snapshot", (c) => {
-    const { json, version } = deps.service.snapshotJson();
-    const etag = `"v${version}"`;
+    const withTracks = c.req.query("tracks") !== "0";
+    const { json, version } = deps.service.snapshotJson(withTracks);
+    const etag = `"v${version}${withTracks ? "" : "-bare"}"`;
     if (c.req.header("if-none-match") === etag) return c.body(null, 304);
     c.header("ETag", etag);
     c.header("Cache-Control", "no-store");
     c.header("Content-Type", "application/json; charset=utf-8");
-    if (c.req.query("tracks") === "0") {
-      const snap = JSON.parse(json) as { units: { track: unknown }[] };
-      snap.units = snap.units.map((u) => ({ ...u, track: [] }));
-      return c.body(JSON.stringify(snap));
-    }
     return c.body(json);
   });
 
@@ -72,33 +67,49 @@ export function createApp(deps: AppDeps): Hono {
   });
 
   app.get("/api/events", (c) => {
-    const lastId = c.req.header("last-event-id") ?? c.req.query("lastEventId") ?? null;
+    const rawLastId = c.req.header("last-event-id") ?? c.req.query("lastEventId") ?? null;
+    const lastId = rawLastId && /^[a-z0-9]{1,8}:\d{1,12}$/.test(rawLastId) ? rawLastId : null;
+    if (deps.hub.full) {
+      // A non-200 makes EventSource stop reconnecting instead of hammering /api/snapshot.
+      c.header("Retry-After", "30");
+      return c.text("too many subscribers", 503);
+    }
+    c.header("X-Accel-Buffering", "no");
+    c.header("Cache-Control", "no-store");
     return streamSSE(
       c,
       async (stream) => {
-        const client = { send: (m: { id: string; event: string; data: string }) => stream.writeSSE(m) };
-        if (!deps.hub.add(client)) {
-          await stream.writeSSE({ event: "resync", data: JSON.stringify({ type: "resync" }) });
+        let done: () => void = () => {};
+        const finished = new Promise<void>((resolve) => {
+          done = resolve;
+        });
+        const client = {
+          send: (m: { id: string; event: string; data: string }) => stream.writeSSE(m),
+          close: () => {
+            done();
+          },
+        };
+        // Register the abort listener before any await so a client that drops mid-handshake is still removed.
+        stream.onAbort(() => {
+          deps.hub.remove(client);
+          done();
+        });
+        if (stream.aborted || !deps.hub.add(client)) {
+          deps.hub.remove(client);
           return;
         }
-        c.header("X-Accel-Buffering", "no");
         await stream.writeSSE({
-          id: deps.hub.lastId,
           event: "hello",
           data: JSON.stringify({ type: "hello", version: deps.service.version, generatedAt: Date.now() }),
         });
         const replay = deps.hub.replayAfter(lastId);
         if (replay === null) await stream.writeSSE({ event: "resync", data: JSON.stringify({ type: "resync" }) });
         else for (const m of replay) await stream.writeSSE(m);
-        await new Promise<void>((resolve) => {
-          stream.onAbort(() => {
-            deps.hub.remove(client);
-            resolve();
-          });
-        });
+        await finished;
+        deps.hub.remove(client);
       },
       async () => {
-        /* stream errors are handled by the hub dropping the client */
+        /* write errors are handled by the hub dropping the client */
       },
     );
   });

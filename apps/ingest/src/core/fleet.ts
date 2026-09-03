@@ -48,13 +48,13 @@ export class Fleet {
     return this.slots.filter((s) => s.carrierKey === key);
   }
 
-  /** Reopen persisted assignments whose carrier is still alive; close the rest. */
-  restore(now: number, isAlive: (key: string) => boolean): { restored: number; closed: number } {
+  /** Reopen persisted assignments whose carrier is still alive and matches the slot's mode; close the rest. */
+  restore(now: number, isAlive: (key: string, mode: Mode) => boolean): { restored: number; closed: number } {
     let restored = 0;
     let closed = 0;
     for (const row of this.repo.listOpen()) {
       const slot = this.byUnit.get(row.unit_id);
-      if (slot && slot.slot === row.slot && isAlive(row.carrier_key)) {
+      if (slot && slot.slot === row.slot && isAlive(row.carrier_key, slot.mode)) {
         slot.carrierKey = row.carrier_key;
         slot.assignedAt = row.from_ts;
         restored++;
@@ -80,7 +80,7 @@ export class Fleet {
     slot.assignedAt = 0;
   }
 
-  history(unitId: string, since: number) {
-    return this.repo.history(unitId, since);
+  pruneClosedBefore(ts: number): number {
+    return this.repo.pruneClosedBefore(ts);
   }
 }

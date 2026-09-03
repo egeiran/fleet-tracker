@@ -28,18 +28,11 @@ export class TrackStore {
     return n;
   }
 
-  has(key: string): boolean {
-    return this.hot.has(key);
-  }
-
   track(key: string): TrackPoint[] {
     return this.hot.get(key) ?? [];
   }
 
-  ensure(key: string): void {
-    if (!this.hot.has(key)) this.hot.set(key, []);
-  }
-
+  /** Drop the hot track of a released carrier; persisted rows age out via prune(). */
   forget(key: string): void {
     this.hot.delete(key);
   }
@@ -84,7 +77,13 @@ export class TrackStore {
     if (!this.pending.length) return 0;
     const rows = this.pending;
     this.pending = [];
-    this.repo.insertMany(rows);
+    try {
+      this.repo.insertMany(rows);
+    } catch (e) {
+      // Keep the rows for the next flush instead of losing them.
+      this.pending = rows.concat(this.pending);
+      throw e;
+    }
     return rows.length;
   }
 

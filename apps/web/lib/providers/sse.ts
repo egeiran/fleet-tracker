@@ -41,6 +41,8 @@ export function openSse(url: string, h: SseHandlers, opts: { watchdogMs?: number
       armWatchdog();
     };
     es.onerror = () => {
+      if (watchdog) clearTimeout(watchdog);
+      watchdog = null;
       es?.close();
       es = null;
       failures++;
@@ -68,6 +70,8 @@ export function openSse(url: string, h: SseHandlers, opts: { watchdogMs?: number
   };
 
   const reconnect = () => {
+    if (watchdog) clearTimeout(watchdog);
+    watchdog = null;
     es?.close();
     es = null;
     scheduleReconnect();

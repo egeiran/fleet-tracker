@@ -15,6 +15,7 @@ describe("TrackStore", () => {
     for (let i = 0; i < 100; i++) if (store.append("ais:1", [10, 60, now - H + i * 10_000], { sog: 5 })) kept++;
     expect(kept).toBe(17);
     expect(store.append("ais:1", [10, 60, now - 2 * H])).toBe(false); // out of order
+    store.forget("ais:9");
     expect(store.flush()).toBe(17);
     expect(repo.count()).toBe(17);
     const again = new TrackStore(repo, 25 * H);

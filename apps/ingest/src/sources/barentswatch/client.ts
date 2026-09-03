@@ -50,7 +50,8 @@ export class BarentsWatchClient {
   async tracksLast24h(mmsi: number): Promise<{ status: number; retryAfterMs: number | null; data: AisMessage[] }> {
     const res = await this.authed(`${BW_HISTORIC_URL}/v1/historic/trackslast24hours/${mmsi}?modelFormat=Json`, { method: "GET" });
     const retryAfter = res.headers.get("retry-after");
-    const retryAfterMs = retryAfter ? Number(retryAfter) * 1000 : null;
+    const seconds = retryAfter ? Number(retryAfter) : NaN;
+    const retryAfterMs = Number.isFinite(seconds) && seconds >= 0 ? Math.min(seconds, 300) * 1000 : null;
     if (!res.ok) return { status: res.status, retryAfterMs, data: [] };
     return { status: res.status, retryAfterMs, data: (await res.json()) as AisMessage[] };
   }

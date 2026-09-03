@@ -6,6 +6,7 @@ import {
   type Coverage,
   type EnturVehicle,
   type IngestEvent,
+  type Mode,
   type Snapshot,
   type SourceState,
   type Status,
@@ -20,7 +21,7 @@ import { logger } from "../log";
 import { CarrierRegistry, isTrain, isVessel, type Observed } from "./carrierRegistry";
 import { Fleet, type Slot } from "./fleet";
 import { MockPool } from "./mockPool";
-import { isVesselMoving, latBand, pickTrain, pickVessel } from "./selection";
+import { isVesselMoving, latBand, pickTrain, pickVessel, vesselClass } from "./selection";
 import { TrackStore } from "./trackStore";
 import { buildLiveUnit } from "./unitBuilder";
 
@@ -49,7 +50,9 @@ export class FleetService {
   coverage: Coverage;
   private listeners = new Set<(e: IngestEvent) => void>();
   private prevStatus = new Map<string, Status>();
-  private snapshotCache: { at: number; json: string; version: number } | null = null;
+  private prevStale = new Map<string, boolean>();
+  private lastMessage = { sea: 0, rail: 0 };
+  private snapshotCache: { at: number; json: string; bareJson: string; version: number } | null = null;
   private now: () => number;
   private seaMock: boolean;
 
@@ -75,17 +78,20 @@ export class FleetService {
   boot(): void {
     const now = this.now();
     const loaded = this.tracks.loadHot(now);
-    const alive = (key: string) => {
+    const alive = (key: string, mode: Mode) => {
       const carrier = this.carriers.get(key);
       const track = this.tracks.track(key);
       const last = track[track.length - 1];
       if (!carrier || !last) return false;
-      const maxAge = carrier.kind === "vessel" ? TIMING.seaSilentMs : TIMING.railSilentMs;
-      if (now - last[2] > maxAge) return false;
+      const expectedKind = mode === "sjø" ? "vessel" : mode === "bane" ? "train" : "mock";
+      if (carrier.kind !== expectedKind) return false;
+      if (mode === "sjø" && this.seaMock) return false;
+      if (now - last[2] > this.silentMs(mode)) return false;
       this.registry.restore(key, carrier, last);
       return true;
     };
     const { restored, closed } = this.fleet.restore(now, alive);
+    this.registry.setPinned(this.fleet.assignedKeys());
     log.info("restored", { points: loaded, restored, closed });
     this.refreshCoverage();
   }
@@ -101,6 +107,10 @@ export class FleetService {
     for (const cb of this.listeners) cb(e);
   }
 
+  private silentMs(mode: Mode): number {
+    return mode === "sjø" ? TIMING.seaSilentMs : TIMING.railSilentMs;
+  }
+
   get streamSince(): string | null {
     return kvGet(this.deps.db, "stream_since");
   }
@@ -113,7 +123,7 @@ export class FleetService {
   onAis(m: AisMessage): void {
     const obs = this.registry.observeVessel(m);
     if (!obs) return;
-    this.coverage.sea.lastMessageAt = this.now();
+    this.lastMessage.sea = this.now();
     const slots = this.fleet.forCarrier(obs.key);
     if (!slots.length) return;
     const kept = this.tracks.append(
@@ -122,8 +132,9 @@ export class FleetService {
       { sog: m.speedOverGround, cog: m.courseOverGround, heading: m.trueHeading, navStatus: m.navigationalStatus },
       "live",
     );
+    if (!kept) return;
     this.carriers.upsert(obs.key, obs.carrier, obs.lastSeen);
-    if (kept) for (const s of slots) this.emitPosition(s, obs);
+    for (const s of slots) this.emitPosition(s, obs);
   }
 
   onTrains(vehicles: EnturVehicle[]): void {
@@ -134,19 +145,26 @@ export class FleetService {
       const slots = this.fleet.forCarrier(obs.key);
       if (!slots.length) continue;
       const kept = this.tracks.append(obs.key, obs.point, { sog: obs.carrier.kind === "train" ? obs.carrier.speed : null, heading: v.bearing }, "live");
+      if (!kept) continue;
       this.carriers.upsert(obs.key, obs.carrier, obs.lastSeen);
-      if (kept) for (const s of slots) this.emitPosition(s, obs);
+      for (const s of slots) this.emitPosition(s, obs);
     }
-    this.coverage.rail = { ...this.coverage.rail, state: "ok", lastMessageAt: now, carriers: this.registry.trains().length };
-    if (this.fleet.empty("bane").length) this.rebalance();
+    this.lastMessage.rail = now;
+    if (this.coverage.rail.state !== "ok") this.coverage.rail = { ...this.coverage.rail, state: "ok", detail: undefined };
+    if (this.fleet.empty("bane").length) this.rebalance("bane");
+    this.refreshCoverage();
+  }
+
+  setRailState(patch: Partial<SourceState>): void {
+    this.coverage.rail = { ...this.coverage.rail, ...patch };
     this.refreshCoverage();
   }
 
   /** Seed the registry from the latest-positions snapshot (used at boot before the stream warms up). */
   seedVessels(messages: AisMessage[]): void {
     for (const m of messages) this.registry.observeVessel(m);
-    this.coverage.sea = { ...this.coverage.sea, state: "ok", lastMessageAt: this.now(), carriers: this.registry.vessels().length };
-    this.rebalance();
+    this.lastMessage.sea = this.now();
+    this.rebalance("sjø");
   }
 
   onHistory(mmsi: number, track: TrackPoint[]): void {
@@ -164,49 +182,53 @@ export class FleetService {
 
   /* ---------- assignment ---------- */
 
-  rebalance(): void {
+  /** Fill empty slots. Never swaps a healthy carrier for a "better" one: stability beats score. */
+  rebalance(only?: Mode): void {
     const now = this.now();
     const taken = this.fleet.assignedKeys();
     let changed = 0;
 
-    if (!this.seaMock) {
+    if (!this.seaMock && (!only || only === "sjø") && this.fleet.empty("sjø").length) {
       const seaSlots = this.fleet.ofMode("sjø");
-      const assigned = seaSlots.filter((s) => s.carrierKey).map((s) => this.registry.get(s.carrierKey!)).filter((o): o is Observed => !!o);
-      const bandCounts = [0, 0, 0, 0];
-      let passengers = 0;
-      let tankers = 0;
-      let moving = 0;
-      for (const o of assigned) {
-        bandCounts[latBand(o.point[1])]!++;
-        if (isVessel(o)) {
-          const cls = Math.floor(o.carrier.shipType / 10) * 10;
-          if (cls === 60) passengers++;
-          if (cls === 80) tankers++;
-          if (isVesselMoving(o.carrier)) moving++;
-        }
+      // Composition quotas scale with fleet size: ~¼ ro-pax, ~⅛ tankers, ⅔ moving.
+      const quota = { passenger: Math.ceil(seaSlots.length / 4), tanker: Math.ceil(seaSlots.length / 8), moving: Math.ceil(seaSlots.length * 0.66) };
+      const tally = { bandCounts: [0, 0, 0, 0], passengers: 0, tankers: 0, moving: 0 };
+      const count = (o: Observed) => {
+        tally.bandCounts[latBand(o.point[1])]!++;
+        if (!isVessel(o)) return;
+        const cls = vesselClass(o.carrier);
+        if (cls === "passasjer") tally.passengers++;
+        if (cls === "tank") tally.tankers++;
+        if (isVesselMoving(o.carrier)) tally.moving++;
+      };
+      for (const s of seaSlots) {
+        const o = s.carrierKey ? this.registry.get(s.carrierKey) : undefined;
+        if (o) count(o);
       }
       const pool = this.registry.vessels();
       for (const slot of this.fleet.empty("sjø")) {
-        const preferMoving = moving < Math.ceil(seaSlots.length * 0.66);
         const pick = pickVessel(slot.unitId, pool, {
           now,
           taken,
-          passengerLeft: 8 - passengers,
-          tankerLeft: 4 - tankers,
-          bandCounts,
-          preferMoving,
+          passengerLeft: quota.passenger - tally.passengers,
+          tankerLeft: quota.tanker - tally.tankers,
+          bandCounts: tally.bandCounts,
+          preferMoving: tally.moving < quota.moving,
         });
         if (!pick || !isVessel(pick)) continue;
         this.assign(slot, pick, now);
         taken.add(pick.key);
-        bandCounts[latBand(pick.point[1])]!++;
-        const cls = Math.floor(pick.carrier.shipType / 10) * 10;
-        if (cls === 60) passengers++;
-        if (cls === 80) tankers++;
-        if (isVesselMoving(pick.carrier)) moving++;
+        count(pick);
         this.deps.requestHistory?.(pick.carrier.mmsi);
         changed++;
       }
+    }
+
+    if (only === "sjø") {
+      if (changed) log.info("rebalanced", { changed, mode: only });
+      this.registry.setPinned(taken);
+      this.refreshCoverage();
+      return;
     }
 
     const lineCounts = new Map<string, number>();
@@ -224,13 +246,13 @@ export class FleetService {
       changed++;
     }
     if (changed) log.info("rebalanced", { changed });
+    this.registry.setPinned(taken);
     this.refreshCoverage();
   }
 
   private assign(slot: Slot, obs: Observed, now: number): void {
     this.fleet.assign(slot, obs.key, now);
     this.carriers.upsert(obs.key, obs.carrier, obs.lastSeen);
-    this.tracks.ensure(obs.key);
     this.tracks.append(obs.key, obs.point, {}, "live");
     this.emitUnit(slot);
   }
@@ -243,33 +265,39 @@ export class FleetService {
       if (!slot.carrierKey) continue;
       const obs = this.registry.get(slot.carrierKey);
       const lastSeen = obs?.lastSeen ?? 0;
-      const limit = slot.mode === "sjø" ? TIMING.seaSilentMs : TIMING.railSilentMs;
-      if (now - lastSeen > limit) {
+      if (now - lastSeen > this.silentMs(slot.mode)) {
+        const key = slot.carrierKey;
         this.fleet.release(slot, now, slot.mode === "bane" ? "train-ended" : "silent");
+        this.tracks.forget(key);
         released++;
         continue;
       }
       const unit = this.buildUnit(slot, now);
-      if (unit) {
-        const prev = this.prevStatus.get(slot.unitId);
-        if (prev !== unit.status) {
-          this.prevStatus.set(slot.unitId, unit.status);
-          this.emit({ type: "status", id: unit.id, status: unit.status, stale: unit.stale, place: unit.place });
-        }
+      if (unit && this.rememberStatus(unit)) {
+        this.emit({ type: "status", id: unit.id, status: unit.status, stale: unit.stale, place: unit.place });
       }
     }
-    this.registry.evictUnseenSince(now - TIMING.seaSilentMs, this.fleet.assignedKeys());
     if (released) {
       log.info("released silent carriers", { released });
+      this.registry.setPinned(this.fleet.assignedKeys());
       this.rebalance();
     }
+    this.registry.evictUnseenSince(now - TIMING.seaSilentMs);
+  }
+
+  /** Returns true when status or staleness changed since the last emit. */
+  private rememberStatus(unit: Unit): boolean {
+    const changed = this.prevStatus.get(unit.id) !== unit.status || this.prevStale.get(unit.id) !== unit.stale;
+    this.prevStatus.set(unit.id, unit.status);
+    this.prevStale.set(unit.id, unit.stale);
+    return changed;
   }
 
   prune(): void {
     const now = this.now();
     const removed = this.tracks.prune(now);
-    this.fleet.history("", 0); // keep the repo warm; no-op query
-    if (removed) log.info("pruned positions", { removed });
+    const closed = this.fleet.pruneClosedBefore(now - TIMING.keepMs);
+    if (removed || closed) log.info("pruned", { positions: removed, assignments: closed });
   }
 
   flush(): number {
@@ -306,8 +334,8 @@ export class FleetService {
     const now = this.now();
     const unit = this.buildUnit(slot, now);
     if (!unit) return;
-    const prev = this.prevStatus.get(slot.unitId);
-    this.prevStatus.set(slot.unitId, unit.status);
+    const had = this.prevStatus.has(unit.id);
+    const changed = this.rememberStatus(unit);
     this.emit({
       type: "position",
       id: unit.id,
@@ -316,14 +344,15 @@ export class FleetService {
       sog: obs.carrier.kind === "vessel" ? obs.carrier.sog : undefined,
       status: unit.status,
       stale: unit.stale,
+      place: unit.place,
     });
-    if (prev && prev !== unit.status) this.emit({ type: "status", id: unit.id, status: unit.status, stale: unit.stale, place: unit.place });
+    if (had && changed) this.emit({ type: "status", id: unit.id, status: unit.status, stale: unit.stale, place: unit.place });
   }
 
   private emitUnit(slot: Slot): void {
     const unit = this.buildUnit(slot, this.now());
     if (!unit) return;
-    this.prevStatus.set(slot.unitId, unit.status);
+    this.rememberStatus(unit);
     this.emit({ type: "unit", unit: this.thin(unit, this.now()) });
   }
 
@@ -331,11 +360,19 @@ export class FleetService {
     const seaAssigned = this.fleet.ofMode("sjø").filter((s) => s.carrierKey).length;
     const railAssigned = this.fleet.ofMode("bane").filter((s) => s.carrierKey).length;
     const next: Coverage = {
-      sea: { ...this.coverage.sea, carriers: this.registry.vessels().length, assigned: this.seaMock ? this.deps.config.fleet.sea : seaAssigned },
-      rail: { ...this.coverage.rail, carriers: this.registry.trains().length, assigned: railAssigned },
+      sea: {
+        ...this.coverage.sea,
+        carriers: this.registry.count("vessel"),
+        assigned: this.seaMock ? this.deps.config.fleet.sea : seaAssigned,
+        lastMessageAt: this.lastMessage.sea || undefined,
+      },
+      rail: { ...this.coverage.rail, carriers: this.registry.count("train"), assigned: railAssigned, lastMessageAt: this.lastMessage.rail || undefined },
       road: this.coverage.road,
     };
-    const changed = JSON.stringify(next) !== JSON.stringify(this.coverage);
+    // lastMessageAt ticks constantly; only state/counts/detail changes are worth a broadcast.
+    const sig = (c: Coverage) =>
+      (["sea", "rail", "road"] as const).map((k) => `${c[k].state}|${c[k].detail ?? ""}|${c[k].carriers}|${c[k].assigned}`).join(";");
+    const changed = sig(next) !== sig(this.coverage);
     this.coverage = next;
     if (changed) this.emit({ type: "coverage", coverage: next });
   }
@@ -374,11 +411,13 @@ export class FleetService {
   }
 
   /** Memoized JSON so a burst of clients does not rebuild 60 units each. */
-  snapshotJson(): { json: string; version: number } {
+  snapshotJson(withTracks = true): { json: string; version: number } {
     const now = this.now();
-    if (this.snapshotCache && now - this.snapshotCache.at < 2000) return this.snapshotCache;
-    const snap = this.snapshot();
-    this.snapshotCache = { at: now, json: JSON.stringify(snap), version: snap.version };
-    return this.snapshotCache;
+    if (!this.snapshotCache || now - this.snapshotCache.at >= 2000) {
+      const snap = this.snapshot();
+      const bare = { ...snap, units: snap.units.map((u) => ({ ...u, track: [] })) };
+      this.snapshotCache = { at: now, json: JSON.stringify(snap), bareJson: JSON.stringify(bare), version: snap.version };
+    }
+    return { json: withTracks ? this.snapshotCache.json : this.snapshotCache.bareJson, version: this.snapshotCache.version };
   }
 }

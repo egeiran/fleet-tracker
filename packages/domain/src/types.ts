@@ -15,7 +15,7 @@ export type TrackPoint = [lng: number, lat: number, ts: number];
 
 export interface UnitEvent {
   ts: number;
-  /** Preformatted "HH:MM" (Europe/Oslo) or a relative label such as "dag 2". */
+  /** Preformatted "HH:MM" (Europe/Oslo) or a relative label such as "dag 2"; live clients reformat from `ts`. */
   time: string;
   label: string;
   place: string;
@@ -134,8 +134,9 @@ export interface Health {
   uptimeSec: number;
   version: string;
   coverage: Coverage;
-  db: { path: string; positions: number; sizeBytes: number };
+  db: { positions: number };
   sse: { clients: number };
+  entur: { ok: boolean; vehicles: number; lastSuccessAt?: number };
   stream: { connected: boolean; reconnects: number; linesPerMin: number; since?: string };
 }
 
@@ -149,6 +150,7 @@ export type IngestEvent =
       sog?: number;
       status: Status;
       stale: boolean;
+      place: string;
     }
   | { type: "status"; id: string; status: Status; stale: boolean; place: string }
   | { type: "unit"; unit: Unit }

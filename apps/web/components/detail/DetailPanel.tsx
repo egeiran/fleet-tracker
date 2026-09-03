@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { formatDegrees, formatDelay, formatKnots, statusLabel, type Unit, type UnitEvent } from "@vakt/domain";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { formatDegrees, formatDelay, formatEventTime, formatKnots, statusLabel, type Unit, type UnitEvent } from "@vakt/domain";
 import { useFleetSelector, useFleetStore } from "@/hooks/useFleetStore";
 import { actions } from "@/lib/fleetStore";
 import { selectSelectedUnit } from "@/lib/selectors";
@@ -19,6 +19,7 @@ export function DetailPanel() {
 function Panel({ unit }: { unit: Unit }) {
   const store = useFleetStore();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const now = useNow();
   const titleId = `detail-${unit.id}`;
   const metrics = [
     { k: "Temperatur", v: `${unit.temp} °C` },
@@ -51,6 +52,11 @@ function Panel({ unit }: { unit: Unit }) {
         <CarrierLine unit={unit} />
       </div>
 
+      {unit.source !== "mock" && (
+        <div className={styles.simRow}>
+          <span className={styles.simNote}>simulert sensor</span>
+        </div>
+      )}
       <div className={styles.metrics}>
         {metrics.map((m) => (
           <div key={m.k} className={styles.metric}>
@@ -58,13 +64,12 @@ function Panel({ unit }: { unit: Unit }) {
             <div className={styles.metricValue}>{m.v}</div>
           </div>
         ))}
-        {unit.source !== "mock" && <div className={styles.simNote}>simulert sensor</div>}
       </div>
 
       <div className={styles.log}>
         <div className={styles.logHead}>Hendelseslogg</div>
         {unit.events.map((e, i) => (
-          <Event key={`${e.ts}-${i}`} e={e} />
+          <Event key={`${e.ts}-${i}`} e={e} live={unit.source !== "mock"} now={now} />
         ))}
       </div>
 
@@ -105,12 +110,40 @@ function CarrierLine({ unit }: { unit: Unit }) {
   return null;
 }
 
-function Event({ e }: { e: UnitEvent }) {
+/* Wall-clock that ticks once a minute so day hints ("i går") stay right without a reload. */
+const clock = { now: 0, subs: new Set<() => void>(), timer: null as ReturnType<typeof setInterval> | null };
+function subscribeClock(cb: () => void): () => void {
+  clock.subs.add(cb);
+  if (!clock.timer) {
+    clock.timer = setInterval(() => {
+      clock.now = Date.now();
+      for (const f of clock.subs) f();
+    }, 60_000);
+  }
+  return () => {
+    clock.subs.delete(cb);
+    if (!clock.subs.size && clock.timer) {
+      clearInterval(clock.timer);
+      clock.timer = null;
+    }
+  };
+}
+function readClock(): number {
+  if (!clock.now) clock.now = Date.now();
+  return clock.now;
+}
+function useNow(): number {
+  return useSyncExternalStore(subscribeClock, readClock, () => 0);
+}
+
+function Event({ e, live, now }: { e: UnitEvent; live: boolean; now: number }) {
+  // Live events carry real timestamps: format on the client so "i går" stays correct as the clock moves.
+  const time = live && now && Number.isFinite(e.ts) ? formatEventTime(e.ts, now) : e.time;
   return (
     <div className={styles.event}>
       <span className={styles.eventDot} style={{ background: EVENT_TONE[e.tone] }} aria-hidden="true" />
       <div className={styles.eventRow}>
-        <span className={styles.eventTime}>{e.time}</span>
+        <span className={styles.eventTime}>{time}</span>
         <span className={styles.eventLabel}>{e.label}</span>
       </div>
       <div className={styles.eventPlace}>

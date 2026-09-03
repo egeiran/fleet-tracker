@@ -8,7 +8,7 @@ import { useFleetSelector } from "./useFleetStore";
 export function useProvider(store: FleetStore): void {
   const ready = useFleetSelector((s) => s.settingsReady);
   const source = useFleetSelector((s) => s.settings.source);
-  const fleetSize = useFleetSelector((s) => s.settings.fleetSize);
+  const fleetSize = useFleetSelector((s) => (s.settings.source === "mock" ? s.settings.fleetSize : 0));
 
   useEffect(() => {
     if (!ready) return;

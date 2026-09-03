@@ -24,11 +24,18 @@ export interface Observed {
 /** In-memory pool of every carrier seen recently. Only assigned carriers are persisted. */
 export class CarrierRegistry {
   private map = new Map<string, Observed>();
+  private pinned = new Set<string>();
+  private counts = { vessel: 0, train: 0 };
 
   constructor(private maxEntries = 5000) {}
 
-  get size(): number {
-    return this.map.size;
+  /** Assigned carriers are pinned: LRU eviction and the unseen sweep skip them. */
+  setPinned(keys: Iterable<string>): void {
+    this.pinned = new Set(keys);
+  }
+
+  count(kind: "vessel" | "train"): number {
+    return this.counts[kind];
   }
 
   get(key: string): Observed | undefined {
@@ -65,13 +72,29 @@ export class CarrierRegistry {
 
   private put(key: string, carrier: Carrier, point: TrackPoint, prev: Observed | undefined): Observed {
     const obs: Observed = { key, carrier, point, prevPoint: prev?.point ?? null, lastSeen: point[2] };
-    this.map.delete(key);
+    if (this.map.delete(key)) this.bump(prev?.carrier, -1);
     this.map.set(key, obs);
+    this.bump(carrier, 1);
     if (this.map.size > this.maxEntries) {
-      const oldest = this.map.keys().next().value;
-      if (oldest !== undefined) this.map.delete(oldest);
+      for (const oldest of this.map.keys()) {
+        if (this.pinned.has(oldest)) continue;
+        this.remove(oldest);
+        break;
+      }
     }
     return obs;
+  }
+
+  private remove(key: string): void {
+    const o = this.map.get(key);
+    if (!o) return;
+    this.map.delete(key);
+    this.bump(o.carrier, -1);
+  }
+
+  private bump(carrier: Carrier | undefined, d: number): void {
+    if (carrier?.kind === "vessel") this.counts.vessel += d;
+    else if (carrier?.kind === "train") this.counts.train += d;
   }
 
   vessels(): Observed[] {
@@ -82,11 +105,11 @@ export class CarrierRegistry {
     return [...this.map.values()].filter((o) => o.carrier.kind === "train");
   }
 
-  evictUnseenSince(before: number, keep: Set<string>): number {
+  evictUnseenSince(before: number): number {
     let n = 0;
     for (const [k, o] of this.map) {
-      if (o.lastSeen < before && !keep.has(k)) {
-        this.map.delete(k);
+      if (o.lastSeen < before && !this.pinned.has(k)) {
+        this.remove(k);
         n++;
       }
     }

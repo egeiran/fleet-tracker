@@ -22,6 +22,7 @@ export class EnturPoller {
     private client: EnturClient,
     private bbox: Bbox,
     private onVehicles: (v: EnturVehicle[]) => void,
+    private onStateChange?: (s: PollerStats) => void,
     private intervalMs: number = TIMING.enturPollMs,
   ) {}
 
@@ -46,9 +47,11 @@ export class EnturPoller {
       this.stats.vehicles = vehicles.length;
       this.onVehicles(vehicles);
     } catch (e) {
+      const wasOk = this.stats.ok;
       this.stats.ok = false;
       this.stats.lastError = errMessage(e);
       log.warn("poll failed", { error: this.stats.lastError });
+      if (wasOk || this.stats.polls === 1) this.onStateChange?.(this.stats);
     }
     if (!this.stopped) this.timer = setTimeout(() => void this.tick(), this.intervalMs);
   }

@@ -67,8 +67,12 @@ export function formatEventTime(ms: number, now: number, timeZone = "Europe/Oslo
   const day = dayFormatter(timeZone).format(new Date(ms));
   const today = dayFormatter(timeZone).format(new Date(now));
   if (day === today) return clock;
-  const yesterday = dayFormatter(timeZone).format(new Date(now - DAY_MS));
-  if (day === yesterday) return `i går ${clock}`;
+  // Compare calendar days (not a fixed 24 h) so DST transitions do not shift "yesterday".
+  const [ty, tm, td] = today.split("-").map(Number) as [number, number, number];
+  const [dy, dm, dd] = day.split("-").map(Number) as [number, number, number];
+  const diffDays = Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(dy, dm - 1, dd)) / DAY_MS);
+  if (diffDays === 1) return `i går ${clock}`;
+  if (diffDays < 0) return clock;
   const [, m, d] = day.split("-");
   return `${d}.${m} ${clock}`;
 }

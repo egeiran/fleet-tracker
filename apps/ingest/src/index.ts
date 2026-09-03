@@ -26,7 +26,14 @@ service.onEvent((e) => hub.broadcast(e));
 service.boot();
 
 /* ---- Entur: rail positions, no key ---- */
-const entur = new EnturPoller(new EnturClient(config.enturClientName), config.bbox, (v) => service.onTrains(v));
+const entur = new EnturPoller(
+  new EnturClient(config.enturClientName),
+  config.bbox,
+  (v) => service.onTrains(v),
+  (s) => {
+    if (!s.ok) service.setRailState({ state: service.coverage.rail.state === "starting" ? "starting" : "degraded", detail: "Entur svarer ikke" });
+  },
+);
 
 /* ---- BarentsWatch: optional; without credentials sea slots fall back to mock ---- */
 let stream: StreamRunner | null = null;
@@ -46,38 +53,47 @@ if (config.barentswatch) {
       service.streamSince = s;
     },
     onStateChange: (s) => {
+      // Upstream error bodies stay in the logs; clients only get a short, generic reason.
       service.setSeaState({
         state: s.connected ? "ok" : service.coverage.sea.state === "starting" ? "starting" : "degraded",
-        detail: s.connected ? undefined : (s.lastError ?? `gjenkobler (forsøk ${s.reconnects})`),
+        detail: s.connected ? undefined : `gjenkobler (forsøk ${s.reconnects})`,
       });
     },
   });
+  // Vessels restored from the database still need their history refreshed.
+  for (const slot of service.fleet.ofMode("sjø")) {
+    const key = slot.carrierKey;
+    if (key?.startsWith("ais:")) history.enqueue(Number(key.slice(4)));
+  }
   void (async () => {
     try {
       const latest = await bw.latestInArea({ bbox: config.bbox });
       log.info("seeded vessels", { count: latest.length });
       service.seedVessels(latest);
-      // Vessels restored from the database still need their history refreshed.
-      for (const slot of service.fleet.ofMode("sjø")) {
-        const key = slot.carrierKey;
-        if (key?.startsWith("ais:")) history?.enqueue(Number(key.slice(4)));
-      }
     } catch (e) {
       log.error("latest snapshot failed", { error: errMessage(e) });
-      service.setSeaState({ state: "degraded", detail: errMessage(e) });
+      service.setSeaState({ state: "degraded", detail: "kunne ikke hente fartøyliste" });
     }
     stream?.start();
   })();
 }
 
 /* ---- HTTP first, so health and the road/mock units are reachable immediately ---- */
+// COUNT(*) walks an index; cache it so health probes stay cheap.
+let countCache = { at: 0, n: 0 };
+function positionsCount(): number {
+  if (Date.now() - countCache.at > 60_000) countCache = { at: Date.now(), n: service.positions.count() };
+  return countCache.n;
+}
+
 const app = createApp({
   config,
   service,
   hub,
   health: () => ({
     uptimeSec: Math.round((Date.now() - startedAt) / 1000),
-    db: { path: config.dbPath, positions: service.positions.count(), sizeBytes: 0 },
+    db: { positions: positionsCount() },
+    entur: { ok: entur.stats.ok, vehicles: entur.stats.vehicles, lastSuccessAt: entur.stats.lastSuccessAt ?? undefined },
     stream: {
       connected: stream?.stats.connected ?? false,
       reconnects: stream?.stats.reconnects ?? 0,
@@ -114,6 +130,8 @@ async function shutdown(signal: string): Promise<void> {
   service.flush();
   server.close();
   db.close();
+  // Give the resync frames a moment to leave the socket before exiting.
+  await new Promise((r) => setTimeout(r, 200));
   process.exit(0);
 }
 process.on("SIGTERM", () => void shutdown("SIGTERM"));

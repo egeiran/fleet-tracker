@@ -9,9 +9,13 @@ export const WAKE_LAYERS = ["wake-moving", "wake-alert"] as const;
 
 const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
-/** Idempotent: safe to call on load, after style changes and from a retry loop. */
+/**
+ * Idempotent: safe to call on load and after style changes. Callers only invoke this once the
+ * style has loaded; `isStyleLoaded()` is deliberately not used because it also reports false
+ * while raster tiles are merely in flight.
+ */
 export function installLayers(map: MlMap): boolean {
-  if (!map.isStyleLoaded()) return false;
+  if (!map.getStyle()) return false;
   if (!map.getSource(TRAILS_SOURCE)) map.addSource(TRAILS_SOURCE, { type: "geojson", data: EMPTY });
 
   // One layer per transport mode: sea solid, rail dashed, road dotted.
@@ -80,7 +84,7 @@ export function installLayers(map: MlMap): boolean {
 
 /** Place-name tiles are toggled by adding/removing a raster layer under the trails. */
 export function setReferenceLayer(map: MlMap, on: boolean): void {
-  if (!map.isStyleLoaded()) return;
+  if (!map.getStyle()) return;
   const has = !!map.getLayer(REF_LAYER_ID);
   if (on && !has) {
     if (!map.getSource(REF_SOURCE_ID)) map.addSource(REF_SOURCE_ID, { type: "raster", tileSize: 256, tiles: [TILE_REF] });

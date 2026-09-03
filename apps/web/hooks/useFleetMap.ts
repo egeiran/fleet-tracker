@@ -182,7 +182,6 @@ export function useFleetMap(containerRef: RefObject<HTMLDivElement | null>, stor
       reconcileMarkers();
       ctrl.ready = true;
       sync();
-      map.fitBounds(HOME_BOUNDS, { padding: pad(), duration: 0 });
       setReferenceLayer(map, store.getState().labels);
       el.dataset.mapReady = "true";
       store.setState({ mapReady: true });
@@ -211,9 +210,12 @@ export function useFleetMap(containerRef: RefObject<HTMLDivElement | null>, stor
     let prev = store.getState();
     const unsub = store.subscribe(() => {
       const s = store.getState();
-      if (s.fleet !== prev.fleet && ctrl.ready) reconcileMarkers();
-      if (s.labels !== prev.labels && ctrl.ready) setReferenceLayer(map, s.labels);
-      if (s.sel && s.sel !== prev.sel && s.provider && ctrl.ready) {
+      // setState notifies synchronously, so record `prev` before anything below re-enters the store.
+      const before = prev;
+      prev = s;
+      if (s.fleet !== before.fleet && ctrl.ready) reconcileMarkers();
+      if (s.labels !== before.labels && ctrl.ready) setReferenceLayer(map, s.labels);
+      if (s.sel && s.sel !== before.sel && s.provider && ctrl.ready) {
         const u = s.byId.get(s.sel);
         if (u) {
           map.easeTo({
@@ -230,11 +232,10 @@ export function useFleetMap(containerRef: RefObject<HTMLDivElement | null>, stor
           const id = s.pendingSel;
           store.setState({ pendingSel: null });
           select(id);
-        } else if (s.fleet !== prev.fleet || !prev.fleet.length) {
+        } else if (s.fleet !== before.fleet || !before.fleet.length) {
           store.setState({ pendingSel: null, toast: `Fant ikke enhet ${s.pendingSel}` });
         }
       }
-      prev = s;
       queueSync();
     });
 

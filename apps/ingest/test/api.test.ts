@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/api/app";
-import { SseHub } from "../src/api/sseHub";
+import { MAX_CLIENTS, MAX_PENDING, SseHub } from "../src/api/sseHub";
 import { loadConfig } from "../src/config";
 import { FleetService } from "../src/core/service";
 import { openDb } from "../src/db/sqlite";
@@ -11,7 +11,17 @@ function make() {
   service.boot();
   const hub = new SseHub();
   service.onEvent((e) => hub.broadcast(e));
-  const app = createApp({ config, service, hub, health: () => ({ uptimeSec: 1, db: { path: ":memory:", positions: 0, sizeBytes: 0 }, stream: { connected: false, reconnects: 0, linesPerMin: 0 } }) });
+  const app = createApp({
+    config,
+    service,
+    hub,
+    health: () => ({
+      uptimeSec: 1,
+      db: { positions: 0 },
+      entur: { ok: true, vehicles: 0 },
+      stream: { connected: false, reconnects: 0, linesPerMin: 0 },
+    }),
+  });
   return { app, service, hub };
 }
 
@@ -44,14 +54,34 @@ describe("api", () => {
     expect((await app.request("/api/health")).status).toBe(200);
     hub.broadcast({ type: "heartbeat", at: 1 });
     hub.broadcast({ type: "heartbeat", at: 2 });
-    const res = await app.request("/api/events", { headers: { "Last-Event-ID": "1" } });
+    const first = `${hub.bootId}:1`;
+    const res = await app.request("/api/events", { headers: { "Last-Event-ID": first } });
+    expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/event-stream");
+    expect(res.headers.get("x-accel-buffering")).toBe("no");
     const reader = res.body!.getReader();
     const { value } = await reader.read();
     const text = new TextDecoder().decode(value);
     expect(text).toContain("event: hello");
     await reader.cancel();
-    expect(hub.replayAfter("1")!.map((m) => m.id)).toEqual(["2"]);
-    expect(hub.replayAfter("nope")).toBeNull();
+    expect(hub.replayAfter(first)!.map((m) => m.id)).toEqual([`${hub.bootId}:2`]);
+    expect(hub.replayAfter("other:1")).toBeNull();
+    expect(hub.replayAfter(null)).toEqual([]);
+  });
+
+  it("refuses new subscribers with 503 when the hub is full and drops slow readers", async () => {
+    const { app, hub } = make();
+    const stuck = { send: () => new Promise<void>(() => {}), close: vi.fn() };
+    for (let i = 0; i < MAX_CLIENTS; i++) hub.add({ send: async () => {}, close: () => {} });
+    expect(hub.add(stuck)).toBe(false);
+    const res = await app.request("/api/events");
+    expect(res.status).toBe(503);
+    expect(res.headers.get("retry-after")).toBe("30");
+
+    const hub2 = new SseHub();
+    hub2.add(stuck);
+    for (let i = 0; i <= MAX_PENDING; i++) hub2.broadcast({ type: "heartbeat", at: i });
+    expect(hub2.size).toBe(0);
+    expect(stuck.close).toHaveBeenCalled();
   });
 });

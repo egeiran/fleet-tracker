@@ -44,12 +44,13 @@ export function syncMap(ctx: SyncContext): SyncResult {
   const zoom = map.getZoom();
 
   const live: { u: Unit; pos: LngLat }[] = [];
-  const posById = new Map<string, LngLat>();
+  const visible = new Set<string>();
   for (const u of state.fleet) {
-    const on = matches(u, filters);
     const pos = provider.positionAt(u, t);
-    posById.set(u.id, pos);
-    if (on) live.push({ u, pos });
+    if (matches(u, filters)) {
+      visible.add(u.id);
+      live.push({ u, pos });
+    }
     markers.get(u.id)?.marker.setLngLat(pos);
   }
 
@@ -74,7 +75,7 @@ export function syncMap(ctx: SyncContext): SyncResult {
   for (const u of state.fleet) {
     const m = markers.get(u.id);
     if (!m) continue;
-    const on = matches(u, filters);
+    const on = visible.has(u.id);
     const isSel = sel === u.id;
     const isHot = isSel || hover === u.id;
     const hidden = !on || clustered.has(u.id);

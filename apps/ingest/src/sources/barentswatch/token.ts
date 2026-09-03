@@ -1,5 +1,5 @@
 import { BW_TOKEN_URL, type BarentsWatchConfig } from "../../config";
-import { errMessage, logger } from "../../log";
+import { logger } from "../../log";
 
 const log = logger("bw.token");
 
@@ -60,8 +60,4 @@ export class TokenProvider {
     log.debug("token refreshed", { expiresIn: json.expires_in });
     return this.token;
   }
-}
-
-export function describeError(e: unknown): string {
-  return errMessage(e);
 }

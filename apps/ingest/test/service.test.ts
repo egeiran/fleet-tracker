@@ -73,6 +73,7 @@ describe("FleetService", () => {
     svc.onAis(ais(1, 5.25, 60.32, t0 + 120_000));
     const pos = events.filter((e) => e.type === "position");
     expect(pos.length).toBe(1);
+    expect(pos[0]).toMatchObject({ id: expect.any(String), place: expect.stringContaining("Bergen") });
     const u1 = svc.units().find((u) => u.carrier.kind === "vessel" && u.carrier.mmsi === 1)!;
     expect(u1.track.length).toBe(2);
     expect(u1.status).toMatch(/moving|alert/);
@@ -99,6 +100,27 @@ describe("FleetService", () => {
     a.tick(7 * 3_600_000);
     a.svc.sweep();
     expect(a.svc.fleet.assignedKeys().size).toBe(0);
+  });
+
+  it("does not restore a vessel into a slot whose mode changed", () => {
+    const a = make({ FLEET_SEA: "2", FLEET_RAIL: "1" });
+    a.svc.seedVessels([ais(7, 5.2, 60.3, a.now()), ais(8, 10.5, 59.5, a.now())]);
+    a.svc.flush();
+    const shrunk = loadConfig({ FLEET_SEA: "1", FLEET_RAIL: "2", FLEET_ROAD: "2", BARENTSWATCH_CLIENT_ID: "x", BARENTSWATCH_CLIENT_SECRET: "y" });
+    const b = new FleetService({ db: a.db, config: shrunk, now: a.now });
+    b.boot();
+    const rail = b.units().filter((u) => u.mode === "bane");
+    expect(rail.every((u) => u.carrier.kind !== "vessel")).toBe(true);
+    expect(b.units().filter((u) => u.mode === "sjø" && u.carrier.kind === "vessel")).toHaveLength(1);
+  });
+
+  it("keeps assigned carriers in the registry under LRU pressure", () => {
+    const { svc } = make();
+    const t0 = svc.snapshot().generatedAt;
+    svc.seedVessels([ais(1, 5.2, 60.3, t0)]);
+    const key = [...svc.fleet.assignedKeys()][0]!;
+    for (let i = 0; i < 6000; i++) svc.registry.observeVessel(ais(100_000 + i, 5 + (i % 10) / 10, 58 + (i % 50) / 10, t0 + i));
+    expect(svc.registry.get(key)).toBeDefined();
   });
 
   it("uses mock sea units when credentials are missing", () => {

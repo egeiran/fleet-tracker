@@ -8,7 +8,12 @@ interface Props {
 const ID_PATTERN = /^[A-Za-z0-9-]{1,32}$/;
 
 function cleanId(raw: string): string {
-  const id = decodeURIComponent(raw);
+  let id = raw;
+  try {
+    id = decodeURIComponent(raw);
+  } catch {
+    return "";
+  }
   return ID_PATTERN.test(id) ? id.toUpperCase() : "";
 }
 

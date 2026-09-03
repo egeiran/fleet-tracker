@@ -10,6 +10,7 @@ import {
   type LngLat,
   type Snapshot,
   type TimeWindow,
+  type TrackPoint,
   type Unit,
 } from "@vakt/domain";
 import { openSse, type SseClient } from "./sse";
@@ -29,8 +30,20 @@ function split(u: Unit): Split {
   return s;
 }
 
+function isUnit(x: unknown): x is Unit {
+  if (!x || typeof x !== "object") return false;
+  const u = x as Unit;
+  return typeof u.id === "string" && Array.isArray(u.track) && Array.isArray(u.position) && Array.isArray(u.events) && !!u.carrier;
+}
+
+function isPoint(p: unknown): p is TrackPoint {
+  return Array.isArray(p) && p.length === 3 && p.every((v) => typeof v === "number" && Number.isFinite(v));
+}
+
 function isSnapshot(x: unknown): x is Snapshot {
-  return !!x && typeof x === "object" && Array.isArray((x as Snapshot).units) && typeof (x as Snapshot).generatedAt === "number";
+  if (!x || typeof x !== "object") return false;
+  const s = x as Snapshot;
+  return typeof s.generatedAt === "number" && Array.isArray(s.units) && s.units.every(isUnit) && !!s.coverage;
 }
 
 /**
@@ -49,8 +62,10 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
   let sse: SseClient | null = null;
   let stopped = false;
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
   let dirty = false;
   let refetching = false;
+  let lastTouch = 0;
 
   const subs = new Set<(s: FleetSnapshotView) => void>();
   const statusSubs = new Set<(s: ProviderStatus, at: number | null) => void>();
@@ -60,8 +75,11 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
     status = s;
     for (const cb of statusSubs) cb(status, lastUpdate);
   };
+  // Every SSE frame would otherwise re-render the header badge; once per flush cadence is plenty.
   const touch = () => {
     lastUpdate = Date.now();
+    if (lastUpdate - lastTouch < 500) return;
+    lastTouch = lastUpdate;
     for (const cb of statusSubs) cb(status, lastUpdate);
   };
 
@@ -120,7 +138,7 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
     switch (ev.type) {
       case "position": {
         const u = units.get(ev.id);
-        if (!u) return;
+        if (!u || !isPoint(ev.point)) return;
         const cutoff = ev.point[2] - DAY_MS;
         const last = u.track[u.track.length - 1];
         if (last && ev.point[2] <= last[2]) return;
@@ -133,6 +151,7 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
           heading: ev.heading ?? u.heading,
           status: ev.status,
           stale: ev.stale,
+          place: typeof ev.place === "string" ? ev.place : u.place,
           trackCoverageFrom: track[0]![2],
           trackCoverageTo: ev.point[2],
         });
@@ -142,11 +161,12 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
       case "status": {
         const u = units.get(ev.id);
         if (!u) return;
-        units.set(u.id, { ...u, status: ev.status, stale: ev.stale, place: ev.place });
+        units.set(u.id, { ...u, status: ev.status, stale: ev.stale, place: typeof ev.place === "string" ? ev.place : u.place });
         scheduleFlush();
         break;
       }
       case "unit":
+        if (!isUnit(ev.unit)) return;
         units.set(ev.unit.id, ev.unit);
         scheduleFlush();
         break;
@@ -170,23 +190,28 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
     start() {
       stopped = false;
       setStatus("connecting");
-      void fetchSnapshot().then((ok) => {
-        if (stopped) return;
-        if (!ok) {
-          setStatus("unavailable");
-          return;
-        }
-        setStatus("live");
-        sse = openSse(`${base}/api/events`, {
-          onEvent: handleEvent,
-          onOpen: () => {
-            setStatus("live");
-            void fetchSnapshot();
-          },
-          onStale: () => setStatus("stale"),
-          onOffline: () => setStatus("offline"),
+      let attempt = 0;
+      const boot = () => {
+        void fetchSnapshot().then((ok) => {
+          if (stopped) return;
+          if (!ok) {
+            // The worker may be restarting; keep trying with capped backoff instead of giving up.
+            setStatus("unavailable");
+            attempt++;
+            retryTimer = setTimeout(boot, Math.min(30_000, 2000 * 2 ** Math.min(attempt, 4)));
+            return;
+          }
+          setStatus("live");
+          sse = openSse(`${base}/api/events`, {
+            onEvent: handleEvent,
+            // Gaps are healed by the server's replay ring or an explicit `resync`; no refetch on open.
+            onOpen: () => setStatus("live"),
+            onStale: () => setStatus("stale"),
+            onOffline: () => setStatus("offline"),
+          });
         });
-      });
+      };
+      boot();
     },
     stop() {
       stopped = true;
@@ -194,6 +219,8 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
       sse = null;
       if (flushTimer) clearTimeout(flushTimer);
       flushTimer = null;
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = null;
       subs.clear();
       statusSubs.clear();
     },

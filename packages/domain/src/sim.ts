@@ -1,7 +1,7 @@
 import { coordLabel } from "./format";
 import { seaArea } from "./place";
 import { fnv1a, mulberry32 } from "./prng";
-import { formatEventTime } from "./time";
+import { formatClock } from "./time";
 import type { LngLat, Mode, Status, TrackPoint, UnitEvent } from "./types";
 
 export const CARGO_LABELS = [
@@ -55,7 +55,7 @@ const HOUR = 3_600_000;
 export function simulate(unitId: string, ctx: SimContext): SimResult {
   const r = mulberry32(fnv1a(unitId));
   const tz = ctx.timeZone ?? "Europe/Oslo";
-  const clock = (ts: number) => formatEventTime(ts, ctx.now, tz);
+  const clock = (ts: number) => formatClock(ts, tz);
   const track = ctx.track;
   const n = track.length;
 

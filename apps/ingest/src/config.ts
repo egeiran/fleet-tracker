@@ -17,9 +17,10 @@ export interface Config {
   version: string;
 }
 
-function int(v: string | undefined, fallback: number): number {
+function int(v: string | undefined, fallback: number, min = 1): number {
+  if (v == null || v.trim() === "") return fallback;
   const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+  return Number.isFinite(n) && n >= min ? Math.floor(n) : fallback;
 }
 
 /** Reads env once. Canonical names first, then the legacy names used in early .env files. */
@@ -36,7 +37,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       .filter(Boolean),
     barentswatch: clientId && clientSecret ? { clientId, clientSecret } : null,
     enturClientName: env.ENTUR_CLIENT_NAME?.trim() || "vakt-fleetmap",
-    fleet: { sea: int(env.FLEET_SEA, 30), rail: int(env.FLEET_RAIL, 15), road: int(env.FLEET_ROAD, 15) },
+    fleet: { sea: int(env.FLEET_SEA, 30, 0), rail: int(env.FLEET_RAIL, 15, 0), road: int(env.FLEET_ROAD, 15, 0) },
     logLevel: level && ["debug", "info", "warn", "error"].includes(level) ? level : "info",
     bbox: HOME_BOUNDS,
     version: env.npm_package_version ?? "0.1.0",

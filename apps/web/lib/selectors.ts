@@ -22,8 +22,6 @@ export const selectCounts = (s: FleetState): StatusCounts => counts(s.fleet);
 export const selectShownCount = (s: FleetState): number => selectVisibleSorted(s).length;
 export const selectSelectedUnit = (s: FleetState): Unit | null => (s.sel ? (s.byId.get(s.sel) ?? null) : null);
 export const selectEmpty = (s: FleetState): boolean => s.fleet.length > 0 && selectVisibleSorted(s).length === 0;
-export const selectClusteringActive = (s: FleetState): boolean =>
-  s.settings.clustering && !s.filters.q.trim() && !s.playing;
 export const selectReticleEnabled = (s: FleetState): boolean =>
   s.settings.reticle !== "av" && !s.reducedMotion && s.inputModality === "pointer";
 export const selectContentLeft = (s: FleetState): number => (s.rail ? 308 : 14);

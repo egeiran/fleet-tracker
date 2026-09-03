@@ -28,6 +28,14 @@ describe("ndjson", () => {
     expect(out).toEqual([{ a: 1 }, { b: 2 }]);
     expect(bad).toEqual(["not json"]);
   });
+  it("drops a line that exceeds the size cap", async () => {
+    const bad: string[] = [];
+    const huge = "x".repeat(50);
+    const out: unknown[] = [];
+    for await (const o of ndjson(stream([huge, huge, '\n{"ok":1}\n']), (l) => bad.push(l), 60)) out.push(o);
+    expect(out).toEqual([{ ok: 1 }]);
+    expect(bad.length).toBe(1);
+  });
   it("handles multi-byte characters split across chunks", async () => {
     const enc = new TextEncoder().encode('{"name":"SJØ"}\n');
     const s = new ReadableStream<Uint8Array>({
