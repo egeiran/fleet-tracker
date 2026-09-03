@@ -83,6 +83,8 @@ export class StreamRunner {
       const ac = new AbortController();
       this.abort = ac;
       const watchdogMs = this.opts.watchdogMs ?? TIMING.streamWatchdogMs;
+      // Connecting counts as activity; otherwise a slow handshake would trip the silence check.
+      this.lastLineAt = Date.now();
       // One periodic check instead of re-arming a timer per line (thousands per minute).
       const watchdog = setInterval(() => {
         if (Date.now() - this.lastLineAt > watchdogMs) {
@@ -91,7 +93,7 @@ export class StreamRunner {
         }
       }, Math.max(1000, Math.floor(watchdogMs / 3)));
       let sinceFlushed = Date.now();
-      let sinceMs = this.stats.since ? Date.parse(this.stats.since) : 0;
+      let sinceMs = (this.stats.since ? Date.parse(this.stats.since) : 0) || 0;
       const connectedAt = Date.now();
       try {
         const res = await this.client.openStream({ bbox: this.opts.bbox }, this.stats.since, ac.signal);

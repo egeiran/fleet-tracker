@@ -21,7 +21,7 @@ const db = openDb(config.dbPath);
 const hub = new SseHub();
 
 let history: HistoryLoader | null = null;
-const service = new FleetService({ db, config, requestHistory: (mmsi) => history?.enqueue(mmsi) });
+const service = new FleetService({ db, config, requestHistory: (mmsi) => history?.enqueue(mmsi), eventCursor: () => hub.lastId });
 service.onEvent((e) => hub.broadcast(e));
 service.boot();
 
@@ -31,7 +31,10 @@ const entur = new EnturPoller(
   config.bbox,
   (v) => service.onTrains(v),
   (s) => {
-    if (!s.ok) service.setRailState({ state: service.coverage.rail.state === "starting" ? "starting" : "degraded", detail: "Entur svarer ikke" });
+    if (s.ok) return;
+    // First failures during startup stay "starting"; three in a row means the source is down.
+    const state = service.coverage.rail.state === "starting" && s.consecutiveFailures < 3 ? "starting" : "degraded";
+    service.setRailState({ state, detail: "Entur svarer ikke" });
   },
 );
 

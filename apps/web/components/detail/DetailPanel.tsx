@@ -115,6 +115,7 @@ const clock = { now: 0, subs: new Set<() => void>(), timer: null as ReturnType<t
 function subscribeClock(cb: () => void): () => void {
   clock.subs.add(cb);
   if (!clock.timer) {
+    clock.now = Date.now();
     clock.timer = setInterval(() => {
       clock.now = Date.now();
       for (const f of clock.subs) f();

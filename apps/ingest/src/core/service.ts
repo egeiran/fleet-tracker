@@ -33,6 +33,8 @@ export interface ServiceDeps {
   config: Config;
   now?: () => number;
   requestHistory?: (mmsi: number) => void;
+  /** Current SSE cursor, captured with each snapshot so clients can replay from exactly that point. */
+  eventCursor?: () => string;
 }
 
 /**
@@ -52,7 +54,8 @@ export class FleetService {
   private prevStatus = new Map<string, Status>();
   private prevStale = new Map<string, boolean>();
   private lastMessage = { sea: 0, rail: 0 };
-  private snapshotCache: { at: number; json: string; bareJson: string; version: number } | null = null;
+  private snapshotCache: { at: number; json: string; bareJson: string; version: number; cursor: string } | null = null;
+  private lastCoverageSig = "";
   private now: () => number;
   private seaMock: boolean;
 
@@ -370,11 +373,13 @@ export class FleetService {
       road: this.coverage.road,
     };
     // lastMessageAt ticks constantly; only state/counts/detail changes are worth a broadcast.
-    const sig = (c: Coverage) =>
-      (["sea", "rail", "road"] as const).map((k) => `${c[k].state}|${c[k].detail ?? ""}|${c[k].carriers}|${c[k].assigned}`).join(";");
-    const changed = sig(next) !== sig(this.coverage);
+    // Compare against the last *emitted* signature: setters patch this.coverage before calling us.
+    const sig = (["sea", "rail", "road"] as const).map((k) => `${next[k].state}|${next[k].detail ?? ""}|${next[k].carriers}|${next[k].assigned}`).join(";");
     this.coverage = next;
-    if (changed) this.emit({ type: "coverage", coverage: next });
+    if (sig !== this.lastCoverageSig) {
+      this.lastCoverageSig = sig;
+      this.emit({ type: "coverage", coverage: next });
+    }
   }
 
   private thin(unit: Unit, now: number): Unit {
@@ -411,13 +416,15 @@ export class FleetService {
   }
 
   /** Memoized JSON so a burst of clients does not rebuild 60 units each. */
-  snapshotJson(withTracks = true): { json: string; version: number } {
+  snapshotJson(withTracks = true): { json: string; version: number; cursor: string } {
     const now = this.now();
     if (!this.snapshotCache || now - this.snapshotCache.at >= 2000) {
+      const cursor = this.deps.eventCursor?.() ?? "";
       const snap = this.snapshot();
       const bare = { ...snap, units: snap.units.map((u) => ({ ...u, track: [] })) };
-      this.snapshotCache = { at: now, json: JSON.stringify(snap), bareJson: JSON.stringify(bare), version: snap.version };
+      this.snapshotCache = { at: now, json: JSON.stringify(snap), bareJson: JSON.stringify(bare), version: snap.version, cursor };
     }
-    return { json: withTracks ? this.snapshotCache.json : this.snapshotCache.bareJson, version: this.snapshotCache.version };
+    const c = this.snapshotCache;
+    return { json: withTracks ? c.json : c.bareJson, version: c.version, cursor: c.cursor };
   }
 }

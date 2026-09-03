@@ -30,6 +30,7 @@ export function createApp(deps: AppDeps): Hono {
     cors({
       origin: (origin) => (origin && originAllowed(origin, deps.config.corsOrigins) ? origin : ""),
       allowMethods: ["GET", "OPTIONS"],
+      exposeHeaders: ["ETag", "X-Event-Id"],
       maxAge: 600,
     }),
   );
@@ -48,10 +49,12 @@ export function createApp(deps: AppDeps): Hono {
 
   app.get("/api/snapshot", (c) => {
     const withTracks = c.req.query("tracks") !== "0";
-    const { json, version } = deps.service.snapshotJson(withTracks);
+    const { json, version, cursor } = deps.service.snapshotJson(withTracks);
     const etag = `"v${version}${withTracks ? "" : "-bare"}"`;
     if (c.req.header("if-none-match") === etag) return c.body(null, 304);
     c.header("ETag", etag);
+    // Clients open /api/events from this cursor so nothing between snapshot and hello is lost.
+    if (cursor) c.header("X-Event-Id", cursor);
     c.header("Cache-Control", "no-store");
     c.header("Content-Type", "application/json; charset=utf-8");
     return c.body(json);
@@ -68,7 +71,8 @@ export function createApp(deps: AppDeps): Hono {
 
   app.get("/api/events", (c) => {
     const rawLastId = c.req.header("last-event-id") ?? c.req.query("lastEventId") ?? null;
-    const lastId = rawLastId && /^[a-z0-9]{1,8}:\d{1,12}$/.test(rawLastId) ? rawLastId : null;
+    // Absent id → nothing to replay; malformed id → resync (never a silent gap).
+    const lastIdValid = rawLastId !== null && /^[a-z0-9]{1,8}:\d{1,12}$/.test(rawLastId);
     if (deps.hub.full) {
       // A non-200 makes EventSource stop reconnecting instead of hammering /api/snapshot.
       c.header("Retry-After", "30");
@@ -87,6 +91,8 @@ export function createApp(deps: AppDeps): Hono {
           send: (m: { id: string; event: string; data: string }) => stream.writeSSE(m),
           close: () => {
             done();
+            // A dropped slow reader should not keep its socket: queued frames would otherwise wait for it to drain.
+            (c.env as { outgoing?: { destroy?: () => void } } | undefined)?.outgoing?.destroy?.();
           },
         };
         // Register the abort listener before any await so a client that drops mid-handshake is still removed.
@@ -102,7 +108,7 @@ export function createApp(deps: AppDeps): Hono {
           event: "hello",
           data: JSON.stringify({ type: "hello", version: deps.service.version, generatedAt: Date.now() }),
         });
-        const replay = deps.hub.replayAfter(lastId);
+        const replay = rawLastId === null ? [] : lastIdValid ? deps.hub.replayAfter(rawLastId) : null;
         if (replay === null) await stream.writeSSE({ event: "resync", data: JSON.stringify({ type: "resync" }) });
         else for (const m of replay) await stream.writeSSE(m);
         await finished;

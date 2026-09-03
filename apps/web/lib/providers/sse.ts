@@ -12,7 +12,11 @@ export interface SseClient {
 
 const EVENT_TYPES = ["hello", "position", "status", "unit", "coverage", "resync", "heartbeat"];
 
-export function openSse(url: string, h: SseHandlers, opts: { watchdogMs?: number; maxFailures?: number } = {}): SseClient {
+export function openSse(
+  url: string,
+  h: SseHandlers,
+  opts: { watchdogMs?: number; maxFailures?: number; lastEventId?: string | null } = {},
+): SseClient {
   const watchdogMs = opts.watchdogMs ?? 45_000;
   const maxFailures = opts.maxFailures ?? 3;
   let es: EventSource | null = null;
@@ -20,7 +24,7 @@ export function openSse(url: string, h: SseHandlers, opts: { watchdogMs?: number
   let failures = 0;
   let watchdog: ReturnType<typeof setTimeout> | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  let lastId: string | null = null;
+  let lastId: string | null = opts.lastEventId ?? null;
 
   const armWatchdog = () => {
     if (watchdog) clearTimeout(watchdog);

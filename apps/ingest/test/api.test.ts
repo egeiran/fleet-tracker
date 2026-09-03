@@ -10,6 +10,8 @@ function make() {
   const service = new FleetService({ db: openDb(":memory:"), config });
   service.boot();
   const hub = new SseHub();
+  const service2 = service as unknown as { deps: { eventCursor?: () => string } };
+  service2.deps.eventCursor = () => hub.lastId;
   service.onEvent((e) => hub.broadcast(e));
   const app = createApp({
     config,
@@ -67,6 +69,28 @@ describe("api", () => {
     expect(hub.replayAfter(first)!.map((m) => m.id)).toEqual([`${hub.bootId}:2`]);
     expect(hub.replayAfter("other:1")).toBeNull();
     expect(hub.replayAfter(null)).toEqual([]);
+
+    // A malformed or foreign id must trigger a resync rather than a silent gap.
+    for (const bad of ["123", "other:1"]) {
+      const r = await app.request("/api/events", { headers: { "Last-Event-ID": bad } });
+      const rd = r.body!.getReader();
+      let text = "";
+      while (!text.includes("resync")) {
+        const { value, done } = await rd.read();
+        if (done) break;
+        text += new TextDecoder().decode(value);
+      }
+      await rd.cancel();
+      expect(text).toContain("event: resync");
+    }
+  });
+
+  it("snapshot exposes the SSE cursor", async () => {
+    const { app, hub } = make();
+    hub.broadcast({ type: "heartbeat", at: 1 });
+    const res = await app.request("/api/snapshot?tracks=0", { headers: { Origin: "https://vakt.example" } });
+    expect(res.headers.get("x-event-id")).toBe(`${hub.bootId}:1`);
+    expect(res.headers.get("access-control-expose-headers")).toContain("X-Event-Id");
   });
 
   it("refuses new subscribers with 503 when the hub is full and drops slow readers", async () => {

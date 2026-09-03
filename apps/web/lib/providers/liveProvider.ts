@@ -66,6 +66,7 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
   let dirty = false;
   let refetching = false;
   let lastTouch = 0;
+  let snapshotCursor: string | null = null;
 
   const subs = new Set<(s: FleetSnapshotView) => void>();
   const statusSubs = new Set<(s: ProviderStatus, at: number | null) => void>();
@@ -117,6 +118,7 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
       const body: unknown = await res.json();
       if (!isSnapshot(body)) throw new Error("snapshot shape");
       if (stopped) return false;
+      snapshotCursor = res.headers.get("x-event-id");
       applySnapshot(body);
       touch();
       return true;
@@ -202,13 +204,17 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
             return;
           }
           setStatus("live");
-          sse = openSse(`${base}/api/events`, {
-            onEvent: handleEvent,
-            // Gaps are healed by the server's replay ring or an explicit `resync`; no refetch on open.
-            onOpen: () => setStatus("live"),
-            onStale: () => setStatus("stale"),
-            onOffline: () => setStatus("offline"),
-          });
+          // Start the stream from the snapshot's cursor: the server replays anything since, or asks for a resync.
+          sse = openSse(
+            `${base}/api/events`,
+            {
+              onEvent: handleEvent,
+              onOpen: () => setStatus("live"),
+              onStale: () => setStatus("stale"),
+              onOffline: () => setStatus("offline"),
+            },
+            { lastEventId: snapshotCursor },
+          );
         });
       };
       boot();

@@ -11,10 +11,11 @@ export interface PollerStats {
   lastError: string | null;
   vehicles: number;
   polls: number;
+  consecutiveFailures: number;
 }
 
 export class EnturPoller {
-  readonly stats: PollerStats = { ok: false, lastSuccessAt: null, lastError: null, vehicles: 0, polls: 0 };
+  readonly stats: PollerStats = { ok: false, lastSuccessAt: null, lastError: null, vehicles: 0, polls: 0, consecutiveFailures: 0 };
   private timer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
 
@@ -43,15 +44,17 @@ export class EnturPoller {
       const vehicles = await this.client.railVehicles(this.bbox);
       this.stats.ok = true;
       this.stats.lastError = null;
+      this.stats.consecutiveFailures = 0;
       this.stats.lastSuccessAt = Date.now();
       this.stats.vehicles = vehicles.length;
       this.onVehicles(vehicles);
     } catch (e) {
       const wasOk = this.stats.ok;
       this.stats.ok = false;
+      this.stats.consecutiveFailures++;
       this.stats.lastError = errMessage(e);
       log.warn("poll failed", { error: this.stats.lastError });
-      if (wasOk || this.stats.polls === 1) this.onStateChange?.(this.stats);
+      if (wasOk || this.stats.consecutiveFailures <= 3) this.onStateChange?.(this.stats);
     }
     if (!this.stopped) this.timer = setTimeout(() => void this.tick(), this.intervalMs);
   }

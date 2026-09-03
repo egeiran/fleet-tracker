@@ -123,6 +123,17 @@ describe("FleetService", () => {
     expect(svc.registry.get(key)).toBeDefined();
   });
 
+  it("broadcasts coverage state changes even when counts are unchanged", () => {
+    const { svc, events } = make();
+    const before = events.filter((e) => e.type === "coverage").length;
+    svc.setRailState({ state: "degraded", detail: "Entur svarer ikke" });
+    const after = events.filter((e) => e.type === "coverage");
+    expect(after.length).toBe(before + 1);
+    expect(after[after.length - 1]).toMatchObject({ coverage: { rail: { state: "degraded" } } });
+    svc.setRailState({ state: "degraded", detail: "Entur svarer ikke" });
+    expect(events.filter((e) => e.type === "coverage").length).toBe(before + 1);
+  });
+
   it("uses mock sea units when credentials are missing", () => {
     const { svc } = make({ BARENTSWATCH_CLIENT_ID: "", BARENTSWATCH_CLIENT_SECRET: "", AIS_CLIENT_ID: "", CLIENT_SECRET: "" });
     const snap = svc.snapshot();
