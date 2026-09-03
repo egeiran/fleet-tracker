@@ -47,7 +47,12 @@ export class EnturPoller {
       this.stats.consecutiveFailures = 0;
       this.stats.lastSuccessAt = Date.now();
       this.stats.vehicles = vehicles.length;
-      this.onVehicles(vehicles);
+      try {
+        this.onVehicles(vehicles);
+      } catch (cbError) {
+        // A consumer bug must not masquerade as an Entur outage.
+        log.error("vehicle callback failed", { error: errMessage(cbError) });
+      }
     } catch (e) {
       this.stats.ok = false;
       this.stats.consecutiveFailures++;

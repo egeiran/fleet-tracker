@@ -54,16 +54,21 @@ export class SseHub {
     if (!lastId) return [];
     const sep = lastId.indexOf(":");
     if (sep < 0 || lastId.slice(0, sep) !== this.bootId) return null;
-    const seq = Number(lastId.slice(sep + 1));
-    if (!Number.isInteger(seq) || seq < 0) return null;
+    const seqText = lastId.slice(sep + 1);
+    if (!/^\d{1,12}$/.test(seqText)) return null;
+    const seq = Number(seqText);
     if (seq >= this.counter) return [];
     const firstSeq = this.counter - this.ring.length + 1;
     if (seq < firstSeq - 1) return null;
     return this.ring.slice(seq - (firstSeq - 1));
   }
 
+  /** Sequence number of a hub-minted id; -1 for anything malformed. */
   sequenceOf(id: string): number {
-    return Number(id.slice(id.indexOf(":") + 1));
+    const sep = id.indexOf(":");
+    if (sep < 0) return -1;
+    const n = Number(id.slice(sep + 1));
+    return Number.isInteger(n) ? n : -1;
   }
 
   broadcast(e: IngestEvent): void {
@@ -76,7 +81,14 @@ export class SseHub {
         continue;
       }
       state.pending++;
-      Promise.resolve(c.send(msg))
+      let result: Promise<void> | void;
+      try {
+        result = c.send(msg);
+      } catch {
+        this.drop(c);
+        continue;
+      }
+      Promise.resolve(result)
         .then(() => {
           state.pending--;
         })

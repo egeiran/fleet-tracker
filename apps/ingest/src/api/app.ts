@@ -4,7 +4,7 @@ import { streamSSE } from "hono/streaming";
 import type { Health } from "@vakt/domain";
 import type { Config } from "../config";
 import type { FleetService } from "../core/service";
-import type { SseHub, SseMessage } from "./sseHub";
+import { MAX_PENDING, type SseHub, type SseMessage } from "./sseHub";
 
 export interface AppDeps {
   config: Config;
@@ -94,6 +94,8 @@ export function createApp(deps: AppDeps): Hono {
         const client = {
           send: (m: SseMessage) => {
             if (replaying) {
+              // A client that stalls the replay must not turn this queue into a memory sink.
+              if (queued.length >= MAX_PENDING) throw new Error("slow reader during replay");
               queued.push(m);
               return;
             }
@@ -125,7 +127,7 @@ export function createApp(deps: AppDeps): Hono {
         } else {
           for (const m of replay) await stream.writeSSE(m);
         }
-        const lastSeq = replay?.length ? deps.hub.sequenceOf(replay[replay.length - 1]!.id) : -1;
+        const lastSeq = replay?.length ? deps.hub.sequenceOf(replay[replay.length - 1]!.id) : replay === null ? deps.hub.sequenceOf(deps.hub.lastId) : -1;
         for (const m of queued) if (deps.hub.sequenceOf(m.id) > lastSeq) await stream.writeSSE(m);
         queued = [];
         replaying = false;

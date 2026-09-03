@@ -68,7 +68,14 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
   let lastTouch = 0;
   let snapshotCursor: string | null = null;
   /** Events that arrive while a snapshot is in flight; replayed on top of it so nothing is lost. */
-  let held: [string, string][] | null = null;
+  let held: [string, string, string | null][] | null = null;
+
+  const seqOf = (id: string | null): number => {
+    if (!id) return -1;
+    const n = Number(id.slice(id.indexOf(":") + 1));
+    return Number.isInteger(n) ? n : -1;
+  };
+  const bootOf = (id: string | null): string => (id ? id.slice(0, id.indexOf(":")) : "");
 
   const subs = new Set<(s: FleetSnapshotView) => void>();
   const statusSubs = new Set<(s: ProviderStatus, at: number | null) => void>();
@@ -131,13 +138,36 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
       refetching = false;
       const replay = held;
       held = null;
-      if (replay) for (const [type, data] of replay) handleEvent(type, data);
+      if (replay && !stopped) {
+        // Drop frames the snapshot already covers (same boot, sequence at or before its cursor).
+        const cutoff = seqOf(snapshotCursor);
+        const boot = bootOf(snapshotCursor);
+        for (const [type, data, id] of replay) {
+          if (id && boot && bootOf(id) === boot && seqOf(id) <= cutoff) continue;
+          handleEvent(type, data, id);
+        }
+      }
     }
   };
 
-  const handleEvent = (type: string, data: string) => {
+  let resyncAttempt = 0;
+  const resync = () => {
+    void fetchSnapshot().then((ok) => {
+      if (stopped) return;
+      if (ok) {
+        resyncAttempt = 0;
+        return;
+      }
+      setStatus("stale");
+      resyncAttempt++;
+      retryTimer = setTimeout(resync, Math.min(30_000, 2000 * 2 ** Math.min(resyncAttempt, 4)));
+    });
+  };
+
+  const handleEvent = (type: string, data: string, id: string | null = null) => {
+    if (stopped) return;
     if (held) {
-      held.push([type, data]);
+      held.push([type, data, id]);
       return;
     }
     let ev: IngestEvent;
@@ -187,7 +217,7 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
         scheduleFlush();
         break;
       case "resync":
-        void fetchSnapshot();
+        resync();
         break;
       case "hello":
       case "heartbeat":

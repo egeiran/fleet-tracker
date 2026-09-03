@@ -68,7 +68,7 @@ describe("api", () => {
     expect(hub.replayAfter(first)!.map((m) => m.id)).toEqual([second]);
     expect(hub.replayAfter("other:1")).toBeNull();
     expect(hub.replayAfter(null)).toEqual([]);
-    expect(hub.replayAfter(`${hub.bootId}:0`)!.length).toBe(hub.replayAfter(`${hub.bootId}:0`)!.length);
+    expect(hub.replayAfter(`${hub.bootId}:0`)!.length).toBe(3); // boot() coverage event + two heartbeats
     expect(hub.replayAfter(`${hub.bootId}:99`)).toEqual([]);
     expect(hub.replayAfter(`${hub.bootId}:x`)).toBeNull();
 
@@ -85,6 +85,34 @@ describe("api", () => {
       await rd.cancel();
       expect(text).toContain("event: resync");
     }
+  });
+
+  it("flushes live frames after the replay in sequence order and drops a reader that stalls the replay", async () => {
+    const { app, hub } = make();
+    for (let i = 0; i < 3; i++) hub.broadcast({ type: "heartbeat", at: i });
+    const cursor = `${hub.bootId}:1`;
+    const res = await app.request("/api/events", { headers: { "Last-Event-ID": cursor } });
+    // Broadcast while the handler is still writing hello/replay: must arrive after the replayed frames, once.
+    hub.broadcast({ type: "heartbeat", at: 99 });
+    const reader = res.body!.getReader();
+    let text = "";
+    const deadline = Date.now() + 2000;
+    while (!text.includes('"at":99') && Date.now() < deadline) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += new TextDecoder().decode(value);
+    }
+    await reader.cancel();
+    const ids = [...text.matchAll(/^id: (.+)$/gm)].map((m) => m[1] ?? "");
+    expect(ids.map((id) => hub.sequenceOf(id))).toEqual([2, 3, 4, 5].slice(0, ids.length));
+    expect(ids.length).toBeGreaterThanOrEqual(3);
+
+    const slow = new SseHub();
+    const stuck = { send: () => { throw new Error("slow reader during replay"); }, close: vi.fn() };
+    slow.add(stuck);
+    slow.broadcast({ type: "heartbeat", at: 1 });
+    expect(slow.size).toBe(0);
+    expect(stuck.close).toHaveBeenCalled();
   });
 
   it("snapshot exposes the SSE cursor", async () => {
