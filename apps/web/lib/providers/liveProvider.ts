@@ -75,7 +75,7 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
     const n = Number(id.slice(id.indexOf(":") + 1));
     return Number.isInteger(n) ? n : -1;
   };
-  const bootOf = (id: string | null): string => (id ? id.slice(0, id.indexOf(":")) : "");
+  const bootOf = (id: string | null): string => (id && id.includes(":") ? id.slice(0, id.indexOf(":")) : "");
 
   const subs = new Set<(s: FleetSnapshotView) => void>();
   const statusSubs = new Set<(s: ProviderStatus, at: number | null) => void>();
@@ -221,7 +221,8 @@ export function createLiveProvider(baseUrl: string): FleetProvider {
         break;
       case "hello":
       case "heartbeat":
-        setStatus("live");
+        // While a resync is still failing the state is unsynced; resync() owns the status until it succeeds.
+        if (resyncAttempt === 0) setStatus("live");
         break;
     }
   };
