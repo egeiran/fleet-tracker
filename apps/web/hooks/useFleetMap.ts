@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, type RefObject } from "react";
-import { bboxOf, CLUSTER_MAX_ZOOM, HOME_BOUNDS, padBbox, SELECT_ZOOM, type LngLat } from "@vakt/domain";
+import { bboxOf, CLUSTER_MAX_ZOOM, HOME_BOUNDS, padBbox, SELECT_ZOOM, unitTitle, type LngLat } from "@vakt/domain";
 import { getWorkerUrl, Map as MlMap, setWorkerUrl, type ErrorEvent as MlErrorEvent } from "maplibre-gl";
 import { actions, type FleetStore } from "@/lib/fleetStore";
 import { cubicOut } from "@/lib/map/easing";
@@ -153,7 +153,7 @@ export function useFleetMap(containerRef: RefObject<HTMLDivElement | null>, stor
       }
       for (const u of fleet) {
         const existing = ctrl.markers.get(u.id);
-        if (existing) updateUnitMarkerIdentity(existing, u.mode, u.status, u.id);
+        if (existing) updateUnitMarkerIdentity(existing, u.mode, u.status, unitTitle(u));
         else ctrl.markers.set(u.id, createUnitMarker(map, u, handlers));
       }
     };

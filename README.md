@@ -67,7 +67,8 @@ header-merket viser «live · sjø utilgj.» når du bytter til live.
   og `prefers-reduced-motion`, og kan settes til presisjon/minimal/av i innstillingene.
 - **Avspilling** – spoler siste 24 timer. I live-modus interpoleres posisjoner på ekte spor; segment
   uten historikk (f.eks. tog før workeren startet) tegnes stiplet i tidslinjen.
-- **Detaljpanel** – bærer («om bord MS … · MMSI · kurs · kn»), simulerte målinger, hendelseslogg
+- **Detaljpanel** – tittel er bærerens eget navn («MS MARION ANITA», «Vy RE11 · tog 834»), med
+  kildelinje (Kystverket AIS · MMSI · IMO, eller Entur · kjøretøy-id · linje), simulerte målinger, hendelseslogg
   knyttet til ekte sporpunkter, og «Del sporingslenke» som kopierer en ekte dyplenke `/spor/<id>`.
 - **Innstillinger** (tannhjul) – datakilde, sikte, hale, gruppering, cellestørrelse, ruter,
   flåtestørrelse. Lagres i localStorage og speiles i URL-en (`?src=live&trails=all`).

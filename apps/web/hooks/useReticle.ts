@@ -1,6 +1,6 @@
 "use client";
 import { createRef, useEffect, useState, type RefObject } from "react";
-import { coordReadout, LOCK_RADIUS, shapeFor, type Unit } from "@vakt/domain";
+import { coordReadout, LOCK_RADIUS, shapeFor, unitTitle, type Unit } from "@vakt/domain";
 import type { FleetStore } from "@/lib/fleetStore";
 import { selectReticleEnabled } from "@/lib/selectors";
 import type { MapController } from "./useFleetMap";
@@ -280,7 +280,7 @@ function renderClusterList(refs: ReticleRefs, members: Unit[]): void {
     dot.style.background = DOT_TONE[u.status];
     const id = document.createElement("span");
     id.className = "clu-id";
-    id.textContent = u.id;
+    id.textContent = unitTitle(u);
     const meta = document.createElement("span");
     meta.className = "clu-mode";
     meta.textContent = u.mode;

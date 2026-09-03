@@ -1,4 +1,5 @@
 import { LOW_BATTERY } from "./constants";
+import { trainNumber } from "./label";
 import type { FilterState, Status, Unit } from "./types";
 
 export const EMPTY_FILTERS: FilterState = { status: "all", modes: [], lowBatt: false, q: "" };
@@ -6,9 +7,9 @@ export const EMPTY_FILTERS: FilterState = { status: "all", modes: [], lowBatt: f
 export function searchText(u: Unit): string {
   const carrier =
     u.carrier.kind === "vessel"
-      ? `${u.carrier.name} ${u.carrier.mmsi}`
+      ? `${u.carrier.name} ${u.carrier.mmsi} ${u.carrier.imo ?? ""} ${u.carrier.callSign ?? ""}`
       : u.carrier.kind === "train"
-        ? `${u.carrier.publicCode ?? ""} ${u.carrier.lineName ?? ""}`
+        ? `${u.carrier.operatorLabel} ${trainNumber(u.carrier.vehicleId)} ${u.carrier.publicCode ?? ""} ${u.carrier.lineName ?? ""}`
         : "";
   return `${u.id} ${u.place} ${u.mode} ${u.booking} ${u.cargoLabel} ${carrier}`.toLowerCase();
 }

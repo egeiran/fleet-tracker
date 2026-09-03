@@ -1,6 +1,16 @@
 "use client";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { formatDegrees, formatDelay, formatEventTime, formatKnots, statusLabel, type Unit, type UnitEvent } from "@vakt/domain";
+import {
+  carrierProvenance,
+  formatDegrees,
+  formatDelay,
+  formatEventTime,
+  formatKnots,
+  statusLabel,
+  unitTitle,
+  type Unit,
+  type UnitEvent,
+} from "@vakt/domain";
 import { useFleetSelector, useFleetStore } from "@/hooks/useFleetStore";
 import { actions } from "@/lib/fleetStore";
 import { selectSelectedUnit } from "@/lib/selectors";
@@ -21,6 +31,8 @@ function Panel({ unit }: { unit: Unit }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const now = useNow();
   const titleId = `detail-${unit.id}`;
+  const title = unitTitle(unit);
+  const provenance = carrierProvenance(unit.carrier);
   const metrics = [
     { k: "Temperatur", v: `${unit.temp} °C` },
     { k: "Batteri", v: `${unit.batt} %` },
@@ -33,7 +45,7 @@ function Panel({ unit }: { unit: Unit }) {
         <div className={styles.topRow}>
           <div>
             <div className={styles.id} id={titleId}>
-              {unit.id}
+              {title}
             </div>
             <div className={styles.place}>{unit.place}</div>
           </div>
@@ -46,10 +58,17 @@ function Panel({ unit }: { unit: Unit }) {
             {statusLabel(unit.status)}
           </span>
           <span className={styles.tagMuted}>{unit.mode}</span>
+          {title !== unit.id && <span className={styles.tagMuted}>enhet {unit.id}</span>}
           <span className={styles.tagMuted}>{unit.booking}</span>
           {unit.stale && <span className={styles.tagWarn}>siste kontakt</span>}
         </div>
         <CarrierLine unit={unit} />
+        {provenance && (
+          <div className={styles.carrier}>
+            <span className={styles.carrierKey}>kilde</span>
+            <span className={styles.carrierValue}>{provenance}</span>
+          </div>
+        )}
       </div>
 
       {unit.source !== "mock" && (
@@ -87,7 +106,9 @@ function CarrierLine({ unit }: { unit: Unit }) {
       <div className={styles.carrier}>
         <span className={styles.carrierKey}>om bord</span>
         <span className={styles.carrierValue}>
-          {c.name} · MMSI {c.mmsi} · {c.shipTypeLabel}
+          {c.shipTypeLabel}
+          {c.lengthM != null && ` · ${c.lengthM} m`}
+          {c.navStatusLabel && ` · ${c.navStatusLabel}`}
           {unit.status !== "idle" && ` · kurs ${formatDegrees(c.cog ?? c.heading)} · ${formatKnots(c.sog)}`}
           {c.destination && ` · → ${c.destination}`}
         </span>
@@ -95,15 +116,13 @@ function CarrierLine({ unit }: { unit: Unit }) {
     );
   }
   if (c.kind === "train") {
-    const line = c.publicCode ?? c.lineName ?? c.vehicleId;
+    const route = c.origin && c.destination ? `${c.origin} → ${c.destination}` : c.lineName;
+    const parts = [route, c.delaySec != null ? formatDelay(c.delaySec) : undefined].filter(Boolean);
+    if (!parts.length) return null;
     return (
       <div className={styles.carrier}>
         <span className={styles.carrierKey}>om bord</span>
-        <span className={styles.carrierValue}>
-          tog {line}
-          {c.origin && c.destination && ` · ${c.origin} → ${c.destination}`} · {c.operatorLabel}
-          {c.delaySec != null && ` · ${formatDelay(c.delaySec)}`}
-        </span>
+        <span className={styles.carrierValue}>{parts.join(" · ")}</span>
       </div>
     );
   }

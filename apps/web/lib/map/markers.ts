@@ -1,4 +1,4 @@
-import type { Mode, Status, Unit } from "@vakt/domain";
+import { unitTitle, type Mode, type Status, type Unit } from "@vakt/domain";
 import { Marker, type Map as MlMap } from "maplibre-gl";
 
 export interface UnitMarker {
@@ -46,7 +46,7 @@ export function createUnitMarker(map: MlMap, unit: Unit, h: MarkerHandlers): Uni
   dot.dataset.status = unit.status;
   const label = document.createElement("div");
   label.className = "mk-label";
-  label.textContent = `${unit.id} · ${unit.mode}`;
+  label.textContent = `${unitTitle(unit)} · ${unit.mode}`;
   inner.append(ring, dot, label);
 
   const abort = new AbortController();
@@ -65,10 +65,10 @@ export function createUnitMarker(map: MlMap, unit: Unit, h: MarkerHandlers): Uni
   return { marker, host, inner, dot, ring, label, abort };
 }
 
-export function updateUnitMarkerIdentity(m: UnitMarker, mode: Mode, status: Status, id: string): void {
+export function updateUnitMarkerIdentity(m: UnitMarker, mode: Mode, status: Status, title: string): void {
   if (m.dot.dataset.mode !== mode) m.dot.dataset.mode = mode;
   if (m.dot.dataset.status !== status) m.dot.dataset.status = status;
-  const text = `${id} · ${mode}`;
+  const text = `${title} · ${mode}`;
   if (m.label.textContent !== text) m.label.textContent = text;
 }
 

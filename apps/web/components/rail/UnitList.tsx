@@ -1,6 +1,6 @@
 "use client";
 import { memo, useCallback, useEffect, useRef, type KeyboardEvent } from "react";
-import { statusLabel, type Unit } from "@vakt/domain";
+import { statusLabel, unitTitle, type Unit } from "@vakt/domain";
 import { useFleetSelector, useFleetStore } from "@/hooks/useFleetStore";
 import { actions } from "@/lib/fleetStore";
 import { selectEmpty, selectVisibleSorted } from "@/lib/selectors";
@@ -75,6 +75,7 @@ export function UnitList({ focusable }: { focusable: boolean }) {
 
 const UnitRow = memo(function UnitRow({ unit, selected, tabStop }: { unit: Unit; selected: boolean; tabStop: boolean }) {
   const store = useFleetStore();
+  const title = unitTitle(unit);
   return (
     <div
       role="option"
@@ -91,8 +92,10 @@ const UnitRow = memo(function UnitRow({ unit, selected, tabStop }: { unit: Unit;
       </span>
       <div className={styles.body}>
         <div className={styles.id}>
-          {unit.id}
-          <span className="visually-hidden">, {statusLabel(unit.status)}</span>
+          {title}
+          <span className="visually-hidden">
+            {title !== unit.id && `, ${unit.id}`}, {statusLabel(unit.status)}
+          </span>
         </div>
         <div className={styles.place}>{unit.place}</div>
       </div>
